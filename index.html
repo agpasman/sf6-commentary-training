@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>SF6 実況トレーニング</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">SF6 <b>実況</b>トレーニング</div>
+    <nav aria-label="機能">
+      <a href="#zukan" data-tab="zukan">技図鑑</a>
+      <a href="#quiz" data-tab="quiz">クイズ</a>
+      <a href="#match" data-tab="match">試合で実況練習</a>
+      <a href="#data" data-tab="data">データ管理</a>
+    </nav>
+    <div class="hright">
+      <span class="pill" id="editPill" hidden>編集モード</span>
+      <span class="pill warn" id="dirtyPill" hidden title="このブラウザに未公開の変更があります">未公開の変更あり</span>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="dialog" id="dialog"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
