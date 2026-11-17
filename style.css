@@ -200,3 +200,10 @@ details.panel summary{cursor:pointer}
 .ftable td.fnote{white-space:normal;min-width:220px;color:#c9cde6}
 .ftable td.plus{color:var(--good);font-weight:700} .ftable td.minus{color:#ff8fa8}
 .card .fd{font-size:11px}
+
+.easybox{border-color:#3a4266}
+.easy{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.easy li::marker{color:var(--muted)}
+.fbig{font-size:16px}
+.adv{font-weight:700;border-radius:4px;padding:0 4px}
+.adv.plus{color:var(--good)} .adv.minus{color:#ff8fa8}

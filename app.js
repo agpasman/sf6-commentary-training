@@ -241,7 +241,7 @@ function moveCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
     <div class="media"><video data-src="${v.video}" muted loop playsinline preload="none"></video><span class="badge ${v.cat === "SA" ? "sa" : ""}">${v.cat}</span></div>
     <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm">${esc(v.name)}</span>
-      <span class="cmd">${cmdHTML(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${firstStartup(v) ? `<span class="fd">発生 ${esc(firstStartup(v))}F</span>` : ""}${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
+      <span class="cmd">${cmdHTML(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${cardFrames(v)}${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
 }
 function normalCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
@@ -278,6 +278,63 @@ function frameTable(v) {
     <tbody>${F.map(r => `<tr>${hasV ? `<td>${esc(r[0])}</td>` : ""}${r.slice(1).map((c, i) => `<td class="${i === 3 || i === 4 ? adv(c) : ""} ${i === 13 ? "fnote" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
     <div class="note">出典：CAPCOM公式サイト フレームデータ（${esc(DATA.framesUpdated || DATA.updated)}取得）。ヒット・ガードは硬直差（＋が有利）。</div>`;
 }
+/* カンタンフレーム解説：自分がこの技を出した側として読む */
+const num = x => { const m = String(x ?? "").replace(/[＋]/g, "+").replace(/[－−]/g, "-").match(/[+-]?\d+/); return m ? parseInt(m[0], 10) : null; };
+function speedWord(st) { return st <= 4 ? "最速クラス" : st <= 6 ? "速い" : st <= 9 ? "ふつう" : st <= 14 ? "やや遅い" : "遅い（見てから対応されやすい）"; }
+function attrWord(a) {
+  const o = [];
+  if (/下/.test(a)) o.push("下段：相手はしゃがみガードが必要");
+  if (/中/.test(a)) o.push("中段：相手は立ちガードが必要（しゃがみガード不可）");
+  if (/^上|上・|※上/.test(a) && !/中/.test(a)) o.push("上段：立ち・しゃがみどちらでもガードできる");
+  if (/弾/.test(a)) o.push("飛び道具");
+  if (/投/.test(a)) o.push("投げ（ガード不能）");
+  return o;
+}
+function cancelWord(c) {
+  c = String(c || ""); if (!c) return "";
+  if (/^C/.test(c)) return "必殺技・SAでキャンセルできる";
+  if (/SA3/.test(c) && !/SA2/.test(c)) return "SA3（CA）でキャンセルできる";
+  if (/SA2/.test(c)) return "SA2・SA3でキャンセルできる";
+  if (/SA/.test(c)) return "SAでキャンセルできる";
+  if (/\*/.test(c)) return "連打キャンセル・ターゲットコンボに対応";
+  return "キャンセル：" + c;
+}
+function easyFrames(r, kind) {
+  if (!r) return "";
+  const st = num(r[1]); const hit = num(r[4]); const grd = num(r[5]); const out = [];
+  if (st != null) out.push(`<li><b class="fbig">発生 ${st}F</b>　${speedWord(st)}${kind === "normal" && st <= 5 ? "。暴れ・割り込みにも使える速さ" : ""}</li>`);
+  if (grd != null) {
+    if (grd > 0) {
+      const beat = grd + 3; // 相手が最速4Fを押しても、発生(有利+3)F以下ならこちらが先に当たる
+      out.push(`<li><span class="adv plus">ガードされても +${grd} 有利</span>　こちらが先に動ける。次に出す技が<b>発生${beat}F以下</b>なら、相手が最速の4F技を押してもこちらが勝つ。${grd >= 2 ? "<b>投げ（発生5F）</b>も相手の4F技より先に決まる（投げ抜け・ジャンプ・バックステップには注意）。" : "投げは相手の最速技と相打ち〜負けになりやすい。"}</li>`);
+    } else if (grd === 0) {
+      out.push(`<li><span class="adv">ガードされたら ±0 五分</span>　お互い同時に動ける。速い技を押したほうが勝つ読み合い。</li>`);
+    } else {
+      const n = -grd;
+      if (n >= 4) out.push(`<li><span class="adv minus">ガードされると ${grd} 不利・反撃確定</span>　相手の<b>発生${n}F以下の技</b>が確定で入る${n >= 7 ? "（中攻撃からのコンボも入る大きな隙）" : n >= 5 ? "（弱攻撃からのコンボが入る）" : "（最速の4F技だけ入る）"}。${n >= 12 ? "SAや強攻撃の大ダメージ反撃も入りやすい。" : ""}</li>`);
+      else out.push(`<li><span class="adv minus">ガードされると ${grd} 少し不利</span>　確定反撃はないが、相手が先に動ける。続けて技を押すと相手の速い技に負けやすいので、ガードやパリィが無難。相手の投げにも注意。</li>`);
+    }
+  } else if (r[5]) out.push(`<li>ガード時：${esc(r[5])}</li>`);
+  if (hit != null) out.push(`<li><span class="adv ${hit > 0 ? "plus" : hit < 0 ? "minus" : ""}">ヒット時 ${hit > 0 ? "+" : ""}${hit}</span>　${hit >= 4 ? `<b>発生${hit}F以下</b>の技なら目押しでつながる。` : hit > 0 ? "こちらが先に動けるが、目押しでつながる技はほぼない（最速でも4F）。そのまま攻め続けられる。" : hit === 0 ? "ヒットしても五分。" : "ヒットしても相手が先に動ける。"}</li>`);
+  else if (/D/.test(r[4] || "")) out.push(`<li><span class="adv plus">ヒット時 ダウン</span>　相手が倒れるので起き攻めに行ける。</li>`);
+  const cw = cancelWord(r[6]); if (cw) out.push(`<li>${cw}</li>`);
+  attrWord(r[13] || "").forEach(a => out.push(`<li>${a}</li>`));
+  if (/弾/.test(r[13] || "")) out.push(`<li class="note">飛び道具は、離れた位置でガードさせるほど有利になる（表の数値は近くで当てた場合）。</li>`);
+  return `<ul class="easy">${out.join("")}</ul>`;
+}
+function easyBlock(v) {
+  const F = v.frames || []; if (!F.length) return "";
+  const labels = F.map((r, i) => r[0] || (F.length > 1 ? `${i + 1}` : ""));
+  return `<div class="panel easybox"><div class="row" style="justify-content:space-between"><h2 style="margin:0">カンタンフレーム解説 <span class="note">（自分がこの技を出した場合）</span></h2>
+    ${F.length > 1 ? `<div class="chips">${labels.map((l, i) => `<button class="chip" data-ev="${i}" aria-pressed="${i === 0}">${esc(l)}</button>`).join("")}</div>` : ""}</div>
+    <div id="easyBody">${easyFrames(F[0], v.kind)}</div>
+    <div class="note">目安です。押した技の発生や相手キャラ・状況（パニッシュカウンター、距離など）で変わります。</div></div>`;
+}
+function cardFrames(v) {
+  const r = (v.frames || []).find(x => num(x[1]) != null); if (!r) return "";
+  const g = num(r[5]);
+  return `<span class="fd">発生 ${num(r[1])}F${g != null ? `　ガード <span class="adv ${g > 0 ? "plus" : g < 0 ? "minus" : ""}">${g > 0 ? "+" : ""}${g}</span>` : ""}</span>`;
+}
 const firstStartup = v => (v.frames || []).map(r => r[1]).find(x => x && /\d/.test(x)) || "";
 
 /* 技の詳細（大きな映像＋備考の編集） */
@@ -294,7 +351,8 @@ function openDetail(id) {
     ${media}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
       <span class="note" style="margin-left:auto">${v.kind === "move" ? `${cmdHTML(v.cmd)} ${esc(v.cond)}` : `${normalCmd(v)}　` + `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
-    <details class="panel" ${v.frames?.length ? "open" : ""}><summary><b>フレームデータ</b></summary>${frameTable(v)}</details>
+    ${easyBlock(v)}
+    <details class="panel"><summary><b>フレームデータの詳細</b> <span class="note">（開くと全項目の表を表示）</span></summary>${frameTable(v)}</details>
     <label class="note">実況用の備考${edit ? "" : "（編集はデータ管理で編集モードをオンに）"}
       <textarea id="dNote" rows="3" ${edit ? "" : "readonly"} placeholder="例：中距離の飛び道具。弾を撒いて相手を動かす起点">${esc(v.note)}</textarea></label>
     ${edit ? `<div class="row">${v.kind === "move" ? `<label class="note row">コマンド <input type="text" id="dCmd" value="${esc(v.cmd)}" style="width:200px" title="例 236P、4溜め6P、強P長押し"></label>` : ""}<label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:220px"></label>
@@ -304,6 +362,7 @@ function openDetail(id) {
     () => { player?.destroy(); });
   const setRate = r => { if (v.kind === "move") $("#dv").playbackRate = r; else player?.rate(r); $$("[data-rate]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.rate === r)); };
   $$("[data-rate]").forEach(b => b.onclick = () => setRate(+b.dataset.rate));
+  $$("[data-ev]").forEach(b => b.onclick = () => { $("#easyBody").innerHTML = easyFrames(v.frames[+b.dataset.ev], v.kind); $$("[data-ev]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
   if (v.kind === "normal" && v.seg) {
     const p = ytParse(v.seg.yt);
     player = new YTPlayer($("#dyt"), p.id, v.seg.s, { vars: { autoplay: 1, mute: 1, start: Math.floor(v.seg.s), end: Math.ceil(v.seg.e) }, onState: st => { if (st === 0) { player.seek(v.seg.s); player.play(); } } });
