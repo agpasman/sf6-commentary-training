@@ -248,7 +248,7 @@ function normalCard(v) {
     <div class="media" style="flex-direction:column;gap:2px"><span class="btnlabel">${esc(v.label)}</span><span class="cmd">${normalCmd(v)}</span>
       <span class="fd">発生 ${esc(v.startup)}F${v.gadv ? `　ガード時 ${esc(v.gadv)}` : ""}${attrTag(v.attr)}</span>
       ${v.seg ? `<span class="badge" style="color:var(--good)">▶ 映像あり</span>` : ""}</div>
-    <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm sub">${esc(v.name)}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
+    <div class="body"><span class="nm">${esc(v.long)}</span><span class="kana" style="margin-top:2px">${esc(v.kana || " ")}</span><span class="nm sub">${esc(v.name)}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
 }
 function setupLazyVideos() {
   if (io) io.disconnect();
