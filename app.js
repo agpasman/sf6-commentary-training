@@ -107,7 +107,7 @@ function updatePills() { $("#editPill").hidden = !PREF.edit; $("#dirtyPill").hid
 function view(id) {
   const r = ITEMS[id]; if (!r) return null;
   const n = M.notes[id] || {};
-  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, note: n.note || "", ok: !!n.ok,
+  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: n.cmd ?? r.item.cmd, note: n.note || "", ok: !!n.ok,
     video: r.kind === "move" ? OFFICIAL_MOVIE(r.cid, r.item.code) : "", seg: r.kind === "normal" ? normalSeg(r.cid, r.item.key) : null };
 }
 function setNote(id, patch) { LOCAL.notes[id] = { ...(LOCAL.notes[id] || {}), ...patch }; commit(); }
@@ -241,7 +241,7 @@ function moveCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
     <div class="media"><video data-src="${v.video}" muted loop playsinline preload="none"></video><span class="badge ${v.cat === "SA" ? "sa" : ""}">${v.cat}</span></div>
     <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm">${esc(v.name)}</span>
-      <span class="cmd">${cmdHTML(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
+      <span class="cmd">${cmdHTML(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${firstStartup(v) ? `<span class="fd">発生 ${esc(firstStartup(v))}F</span>` : ""}${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
 }
 function normalCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
@@ -268,6 +268,18 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("input", e => { if (TAB === "zukan" && e.target.id === "zq") { Z.q = e.target.value; const pos = e.target.selectionStart; renderZukan(); const s = $("#zq"); s.focus(); s.setSelectionRange(pos, pos); } });
 
+/* フレームデータ表 */
+function frameTable(v) {
+  const F = v.frames || []; if (!F.length) return `<div class="note">公式のフレームデータに、この技の行はありません。</div>`;
+  const H = DATA.frameCols;
+  const adv = x => { const n = parseInt(String(x).replace(/[^\d+-]/g, ""), 10); return isNaN(n) ? "" : n > 0 ? "plus" : n < 0 ? "minus" : ""; };
+  const hasV = F.some(r => r[0]);
+  return `<div class="ftable"><table><thead><tr>${hasV ? "<th>種類</th>" : ""}<th>発生</th><th>持続</th><th>硬直</th><th>ヒット</th><th>ガード</th><th>キャンセル</th><th>ダメージ</th><th>補正</th><th title="${esc(H[8])}">Dゲージ<br>増(ヒット)</th><th title="${esc(H[9])}">Dゲージ<br>減(ガード)</th><th title="${esc(H[10])}">Dゲージ<br>減(パニッシュ)</th><th>SA</th><th>属性</th><th>備考</th></tr></thead>
+    <tbody>${F.map(r => `<tr>${hasV ? `<td>${esc(r[0])}</td>` : ""}${r.slice(1).map((c, i) => `<td class="${i === 3 || i === 4 ? adv(c) : ""} ${i === 13 ? "fnote" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="note">出典：CAPCOM公式サイト フレームデータ（${esc(DATA.framesUpdated || DATA.updated)}取得）。ヒット・ガードは硬直差（＋が有利）。</div>`;
+}
+const firstStartup = v => (v.frames || []).map(r => r[1]).find(x => x && /\d/.test(x)) || "";
+
 /* 技の詳細（大きな映像＋備考の編集） */
 function openDetail(id) {
   const v = view(id); if (!v) return;
@@ -275,16 +287,17 @@ function openDetail(id) {
   let player = null;
   const media = v.kind === "move" ? `<video id="dv" src="${v.video}" autoplay loop muted playsinline controls></video>`
     : v.seg ? `<div class="ytbox"><div id="dyt"></div></div>` : `<div class="banner">この通常技の映像はまだありません。「データ管理」→「通常技の映像」でYouTubeの区間を登録できます。</div>`;
-  openModal(`
+  openModal(`<div class="wide"></div>
     <div class="row" style="justify-content:space-between"><div><span class="note">${esc(charName(v.cid))}／${esc(v.kind === "move" ? v.cat : "通常技")}</span>
       ${v.kind === "normal" ? `<div class="bigname">${esc(v.label)}</div><span class="kana" style="font-size:12px">${esc(v.kana)}</span><div>${esc(v.name)}</div>` : `<span class="kana" style="font-size:14px">${esc(v.kana)}</span><div class="bigname">${esc(v.name)}</div>`}</div>
       <button class="btn" data-close>閉じる</button></div>
     ${media}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
       <span class="note" style="margin-left:auto">${v.kind === "move" ? `${cmdHTML(v.cmd)} ${esc(v.cond)}` : `${normalCmd(v)}　` + `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
+    <details class="panel" ${v.frames?.length ? "open" : ""}><summary><b>フレームデータ</b></summary>${frameTable(v)}</details>
     <label class="note">実況用の備考${edit ? "" : "（編集はデータ管理で編集モードをオンに）"}
       <textarea id="dNote" rows="3" ${edit ? "" : "readonly"} placeholder="例：中距離の飛び道具。弾を撒いて相手を動かす起点">${esc(v.note)}</textarea></label>
-    ${edit ? `<div class="row"><label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:260px"></label>
+    ${edit ? `<div class="row">${v.kind === "move" ? `<label class="note row">コマンド <input type="text" id="dCmd" value="${esc(v.cmd)}" style="width:200px" title="例 236P、4溜め6P、強P長押し"></label>` : ""}<label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:220px"></label>
       <label class="row note"><input type="checkbox" id="dOk" ${v.ok ? "checked" : ""}> 確認済み</label>
       <button class="btn primary" id="dSave">保存</button></div>` : ""}
     ${v.kind === "move" ? `<div class="note">映像：CAPCOM公式サイトのコマンドリストより</div>` : ""}`,
@@ -298,7 +311,9 @@ function openDetail(id) {
     const iv = setInterval(() => { if (player.t() > v.seg.e) player.seek(v.seg.s); }, 100);
     const prev = modalCleanup; modalCleanup = () => { clearInterval(iv); prev && prev(); };
   }
-  if (edit) $("#dSave").onclick = () => { setNote(id, { note: $("#dNote").value.trim(), kana: $("#dKana").value.trim(), ok: $("#dOk").checked }); toast("このブラウザに保存しました。全員に反映するにはデータ管理から書き出してください", 3500); closeModal(); render(); };
+  if (edit) $("#dSave").onclick = () => { const patch = { note: $("#dNote").value.trim(), kana: $("#dKana").value.trim(), ok: $("#dOk").checked };
+    if ($("#dCmd")) { const c = $("#dCmd").value.trim(); if (c !== ITEMS[id].item.cmd) patch.cmd = c; else patch.cmd = undefined; }
+    setNote(id, patch); toast("このブラウザに保存しました。全員に反映するにはデータ管理から書き出してください", 3500); closeModal(); render(); };
 }
 
 /* =========================================================

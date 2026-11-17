@@ -188,3 +188,15 @@ kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px;
 @media (max-width:1000px){.combo-edit{grid-template-columns:1fr}}
 .steprow{display:grid;grid-template-columns:22px 104px 1fr 76px auto;gap:6px;align-items:center;background:var(--panel2);border-radius:6px;padding:4px 6px}
 .steprow .cmd .cmdicons{font-size:12px}
+
+/* フレームデータ表 */
+.dialog:has(.wide){width:min(1100px,100%)}
+.wide{display:none}
+details.panel summary{cursor:pointer}
+.ftable{overflow-x:auto}
+.ftable table{border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;min-width:900px}
+.ftable th{font-weight:700;color:var(--muted);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11px}
+.ftable td{padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+.ftable td.fnote{white-space:normal;min-width:220px;color:#c9cde6}
+.ftable td.plus{color:var(--good);font-weight:700} .ftable td.minus{color:#ff8fa8}
+.card .fd{font-size:11px}
