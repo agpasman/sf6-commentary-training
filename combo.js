@@ -24,18 +24,19 @@ function ensureSys() {
 function cleanupCombo() { C.playId++; C.playing = false; try { C.stageP?.destroy(); } catch (e) {} C.stageP = null; }
 
 /* 強さ（弱中強OD）を指定できる技か：コマンドの最後が強さ指定のないP/K */
-const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強+])[PK]$/.test(v.cmd || "");
+const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強+])[PK]$/.test(ITEMS[v.id]?.item.cmd || "");
 function stepView(st) {
   const v = view(st.ref); if (!v) return null;
   let name = v.kind === "normal" ? v.label : v.name, cmd = v.kind === "normal" ? null : v.cmd;
   if (st.str && strable(v)) {
     name = (st.str === "OD" ? "OD" : st.str) + v.name;
-    cmd = v.cmd.replace(/([PK])$/, st.str === "OD" ? "$1+$1" : st.str + "$1");
+    cmd = PREF.ctrl === "modern" ? (v.cmd ? v.cmd + (st.str === "OD" ? "+強" : "") : "") : v.cmd.replace(/([PK])$/, st.str === "OD" ? "$1+$1" : st.str + "$1");
   }
   return { ...v, sname: name, scmd: cmd };
 }
 const stepCmd = sv => sv.kind === "normal" ? normalCmd(sv) : cmdHTML(sv.scmd || "");
 const stepCmdText = sv => {
+  if (sv.kind === "normal" && PREF.ctrl === "modern") return sv.mcmd || sv.label;
   if (sv.kind === "normal") { const p = { s: "5", c: "2", j: "j.", v: "垂直j." }[sv.key[0]]; return p + BTN_JA[sv.key.slice(1)]; }
   return sv.scmd || "";
 };

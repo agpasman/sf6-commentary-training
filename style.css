@@ -207,3 +207,8 @@ details.panel summary{cursor:pointer}
 .fbig{font-size:16px}
 .adv{font-weight:700;border-radius:4px;padding:0 4px}
 .adv.plus{color:var(--good)} .adv.minus{color:#ff8fa8}
+#ctrlmode button{padding:4px 10px;font-size:12px}
+.ic.mod{min-width:1.6em;height:1.45em;border-radius:99px;padding:0 .4em;font-weight:700;font-size:.82em;color:#0c0f1c;display:inline-flex;align-items:center;justify-content:center}
+.ic.mod.ml{background:#74c7ff} .ic.mod.mm{background:#ffd21f} .ic.mod.mh{background:#ff5a7e;color:#fff}
+.ic.mod.msp{background:#c47bff;color:#fff} .ic.mod.mauto{background:#b9bfd9} .ic.mod.mdi{background:#3ddc97} .ic.mod.mdp{background:#3ddc97}
+.ic.mod.mall{background:#b9bfd9} .ic.mod.mthrow{background:#b9bfd9}

@@ -37,7 +37,7 @@ const ROT = `<span class="ic dir" title="1回転"><svg viewBox="0 0 20 20" aria-
 function cmdHTML(cmd, opt = {}) {
   cmd = String(cmd || ""); if (!cmd) return "";
   if (PREF.notation !== "icon") return esc(cmd);
-  const re = /^(?:(1回転)|([1-9])(溜め)|([1-9])|(弱|中|強)?([PK])|(連打)|(\+|＋)|( ?→ ?)|( or ))/;
+  const re = /^(?:(1回転)|([1-9])(溜め)|([1-9])|(弱|中|強)?([PK])|(連打)|(\+|＋)|( ?→ ?)|( or )|(SP|AUTO|DI|DP)|(攻撃)|(投げ)|(弱|中|強))/;
   let out = "", buf = "";
   const flush = () => { if (buf.trim()) out += `<span class="ic txt">${esc(buf.trim())}</span>`; buf = ""; };
   // かっこ内の説明はそのまま文字で出す
@@ -57,6 +57,10 @@ function cmdHTML(cmd, opt = {}) {
         else if (m[8]) out += `<span class="ic plus">+</span>`;
         else if (m[9]) out += `<span class="ic seq">▸</span>`;
         else if (m[10]) out += `<span class="ic txt">or</span>`;
+        else if (m[11]) out += `<span class="ic mod m${m[11].toLowerCase()}">${m[11]}</span>`;
+        else if (m[12]) out += `<span class="ic mod mall">攻撃</span>`;
+        else if (m[13]) out += `<span class="ic mod mthrow">投げ</span>`;
+        else if (m[14]) out += `<span class="ic mod ${{ "弱": "ml", "中": "mm", "強": "mh" }[m[14]]}">${m[14]}</span>`;
         i += m[0].length;
       } else { buf += rest[0]; i++; }
     }
@@ -66,6 +70,7 @@ function cmdHTML(cmd, opt = {}) {
 }
 const NORMAL_PREFIX = { s: ["5", ""], c: ["2", "2"], j: ["j.", "ジャンプ中"], v: ["垂直j.", "垂直ジャンプ中"] };
 function normalCmd(v) {
+  if (PREF.ctrl === "modern") return v.mcmd ? cmdHTML(v.mcmd) : `<span class="note">モダン：弱・中・強ボタン</span>`;
   const p = NORMAL_PREFIX[v.key[0]]; const btn = BTN_JA[v.key.slice(1)];
   return PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc(p[0] + btn);
 }
@@ -107,7 +112,8 @@ function updatePills() { $("#editPill").hidden = !PREF.edit; $("#dirtyPill").hid
 function view(id) {
   const r = ITEMS[id]; if (!r) return null;
   const n = M.notes[id] || {};
-  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: n.cmd ?? r.item.cmd, note: n.note || "", ok: !!n.ok,
+  const mod = PREF.ctrl === "modern" && r.kind === "move";
+  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: mod ? (r.item.mcmd ?? "") : (n.cmd ?? r.item.cmd), cond: mod ? (r.item.mcond || (r.item.mcmd == null ? "（モダン操作の技表にない技）" : "")) : r.item.cond, note: n.note || "", ok: !!n.ok,
     video: r.kind === "move" ? OFFICIAL_MOVIE(r.cid, r.item.code) : "", seg: r.kind === "normal" ? normalSeg(r.cid, r.item.key) : null };
 }
 function setNote(id, patch) { LOCAL.notes[id] = { ...(LOCAL.notes[id] || {}), ...patch }; commit(); }
@@ -355,7 +361,7 @@ function openDetail(id) {
     <details class="panel"><summary><b>フレームデータの詳細</b> <span class="note">（開くと全項目の表を表示）</span></summary>${frameTable(v)}</details>
     <label class="note">実況用の備考${edit ? "" : "（編集はデータ管理で編集モードをオンに）"}
       <textarea id="dNote" rows="3" ${edit ? "" : "readonly"} placeholder="例：中距離の飛び道具。弾を撒いて相手を動かす起点">${esc(v.note)}</textarea></label>
-    ${edit ? `<div class="row">${v.kind === "move" ? `<label class="note row">コマンド <input type="text" id="dCmd" value="${esc(v.cmd)}" style="width:200px" title="例 236P、4溜め6P、強P長押し"></label>` : ""}<label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:220px"></label>
+    ${edit ? `<div class="row">${v.kind === "move" && PREF.ctrl !== "modern" ? `<label class="note row">コマンド <input type="text" id="dCmd" value="${esc(v.cmd)}" style="width:200px" title="例 236P、4溜め6P、強P長押し"></label>` : ""}<label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:220px"></label>
       <label class="row note"><input type="checkbox" id="dOk" ${v.ok ? "checked" : ""}> 確認済み</label>
       <button class="btn primary" id="dSave">保存</button></div>` : ""}
     ${v.kind === "move" ? `<div class="note">映像：CAPCOM公式サイトのコマンドリストより</div>` : ""}`,
@@ -393,7 +399,7 @@ function qPool(mode, cid) {
   const chars = cid === "all" ? CHARS : [CMAP[cid]];
   const out = [];
   chars.forEach(c => {
-    if (mode.startsWith("n")) normalsOf(c.id).forEach(v => { if (mode === "nVideo" && !v.seg) return; out.push(v); });
+    if (["nName", "nBtn", "nVideo"].includes(mode)) normalsOf(c.id).forEach(v => { if (mode === "nVideo" && !v.seg) return; out.push(v); });
     else movesOf(c.id).forEach(v => {
       if (!Q.cfg.cats[v.cat]) return;
       if (mode === "note" && !v.note) return; if (mode === "cmd" && !v.cmd) return; if (mode === "kana" && !(v.kana && hasKanji(v.name))) return;
@@ -784,7 +790,11 @@ function exportShared() {
 }
 
 /* 表記切り替え（ヘッダー） */
-function renderNotation() { const b = $("#notation"); if (!b) return; $$("button", b).forEach(x => x.setAttribute("aria-pressed", x.dataset.nt === (PREF.notation || "num"))); }
+function renderNotation() {
+  $$("#notation button").forEach(x => x.setAttribute("aria-pressed", x.dataset.nt === (PREF.notation || "num")));
+  $$("#ctrlmode button").forEach(x => x.setAttribute("aria-pressed", x.dataset.ct === (PREF.ctrl || "classic")));
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-ct]"); if (!b) return; PREF.ctrl = b.dataset.ct; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
 document.addEventListener("click", e => { const b = e.target.closest("[data-nt]"); if (!b) return; PREF.notation = b.dataset.nt; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
 
 /* ---------- 起動 ---------- */
