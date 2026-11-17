@@ -143,3 +143,23 @@ kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px;
 .mlist{display:flex;flex-direction:column;gap:2px;max-height:520px;overflow:auto}
 .nseg{display:grid;grid-template-columns:90px 1fr 88px 88px auto;gap:6px;align-items:center;font-size:13px}
 .nseg input{width:100%}
+
+/* 操作アイコン */
+.hright{align-items:center}
+#notation button{padding:4px 10px;font-size:12px}
+.cmdicons{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;vertical-align:middle;line-height:1}
+.ic{display:inline-flex;align-items:center;justify-content:center;flex:none}
+.ic.dir svg{width:1.45em;height:1.45em}
+.ic.dir circle:first-child{fill:#262c46;stroke:#3a4266;stroke-width:1}
+.ic.dir .fg{stroke:var(--ink);fill:var(--ink)}
+.ic.dir path.fg{fill:none}
+.ic.btn{min-width:1.6em;height:1.45em;border-radius:99px;padding:0 .35em;font-weight:700;font-size:.92em;color:#0c0f1c;gap:1px}
+.ic.btn small{font-size:.72em;font-weight:700}
+.ic.btn.any{background:#b9bfd9}
+.ic.btn.l{background:#74c7ff} .ic.btn.m{background:#ffd21f} .ic.btn.h{background:#ff5a7e;color:#fff}
+.ic.btn.ki{border-radius:5px}
+.ic.plus,.ic.seq{color:var(--muted);font-weight:700;padding:0 1px}
+.ic.txt{font-size:.85em;color:var(--muted);padding:0 2px;flex:0 1 auto;min-width:0;white-space:normal;line-height:1.35}
+.cmdicons.big{font-size:34px;gap:6px}
+.card .cmd .cmdicons{font-size:13px}
+.pick .c .cmdicons{font-size:11px}

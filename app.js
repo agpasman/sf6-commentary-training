@@ -20,6 +20,54 @@ function toast(msg, ms = 2600) { const t = $("#toast"); t.textContent = msg; t.c
 const kata2hira = s => String(s || "").replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const norm = s => kata2hira(String(s || "").normalize("NFKC")).replace(/[\s・･、。!！?？「」（）()\-]/g, "").replace(/竜/g, "龍").toLowerCase();
 
+
+/* ---------- 操作表記（テンキー／アイコン） ---------- */
+const ARROW_DEG = { 6: 0, 3: 45, 2: 90, 1: 135, 4: 180, 7: 225, 8: 270, 9: 315 };
+function arrowIcon(d) {
+  if (d === "5") return `<span class="ic dir" title="ニュートラル"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><circle cx="10" cy="10" r="2.6" class="fg"/></svg></span>`;
+  return `<span class="ic dir" title="${d}"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><g transform="rotate(${ARROW_DEG[d]} 10 10)"><path class="fg" d="M4.5 10h8.2M9.6 6.2 13.6 10l-4 3.8" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g></svg></span>`;
+}
+function btnIcon(str, kind) {
+  const s = { "弱": "l", "中": "m", "強": "h" }[str] || "any";
+  return `<span class="ic btn ${kind === "P" ? "pu" : "ki"} ${s}" title="${str || ""}${kind}">${str ? `<small>${str}</small>` : ""}${kind}</span>`;
+}
+const ROT = `<span class="ic dir" title="1回転"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><path class="fg" d="M14.6 7.2A5.4 5.4 0 1 0 15 11" fill="none" stroke-width="2.2" stroke-linecap="round"/><path class="fg" d="M15.8 4.2v3.6h-3.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+function cmdHTML(cmd, opt = {}) {
+  cmd = String(cmd || ""); if (!cmd) return "";
+  if (PREF.notation !== "icon") return esc(cmd);
+  const re = /^(?:(1回転)|([1-9])(溜め)|([1-9])|(弱|中|強)?([PK])|(連打)|(\+|＋)|( ?→ ?)|( or ))/;
+  let out = "", buf = "";
+  const flush = () => { if (buf.trim()) out += `<span class="ic txt">${esc(buf.trim())}</span>`; buf = ""; };
+  // かっこ内の説明はそのまま文字で出す
+  for (const part of cmd.split(/(（[^）]*）|\([^)]*\))/)) {
+    if (!part) continue;
+    if (/^[（(]/.test(part)) { buf += part; continue; }
+    let i = 0, m;
+    while (i < part.length) {
+      const rest = part.slice(i);
+      if ((m = rest.match(re))) {
+        flush();
+        if (m[1]) out += ROT;
+        else if (m[2]) out += arrowIcon(m[2]) + `<span class="ic txt">溜め</span>`;
+        else if (m[4]) out += arrowIcon(m[4]);
+        else if (m[6]) out += btnIcon(m[5], m[6]);
+        else if (m[7]) out += `<span class="ic txt">連打</span>`;
+        else if (m[8]) out += `<span class="ic plus">+</span>`;
+        else if (m[9]) out += `<span class="ic seq">▸</span>`;
+        else if (m[10]) out += `<span class="ic txt">or</span>`;
+        i += m[0].length;
+      } else { buf += rest[0]; i++; }
+    }
+  }
+  flush();
+  return `<span class="cmdicons${opt.big ? " big" : ""}">${out}</span>`;
+}
+const NORMAL_PREFIX = { s: ["5", ""], c: ["2", "2"], j: ["j.", "ジャンプ中"], v: ["垂直j.", "垂直ジャンプ中"] };
+function normalCmd(v) {
+  const p = NORMAL_PREFIX[v.key[0]]; const btn = v.label.replace(/^(立ち|しゃがみ|垂直ジャンプ|ジャンプ)/, "");
+  return PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc(p[0] + btn);
+}
+
 /* ---------- データ索引 ---------- */
 const CHARS = DATA.chars;
 const CMAP = Object.fromEntries(CHARS.map(c => [c.id, c]));
@@ -186,11 +234,11 @@ function moveCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
     <div class="media"><video data-src="${v.video}" muted loop playsinline preload="none"></video><span class="badge ${v.cat === "SA" ? "sa" : ""}">${v.cat}</span></div>
     <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm">${esc(v.name)}</span>
-      <span class="cmd">${esc(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
+      <span class="cmd">${cmdHTML(v.cmd)}${v.cond ? ` ${esc(v.cond)}` : ""}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
 }
 function normalCard(v) {
   return `<button class="card ${Z.hide ? "hidden" : ""}" data-open="${v.id}">
-    <div class="media" style="flex-direction:column;gap:2px"><span class="btnlabel">${esc(v.label)}</span>
+    <div class="media" style="flex-direction:column;gap:2px"><span class="btnlabel">${esc(v.label)}</span><span class="cmd">${normalCmd(v)}</span>
       <span class="fd">発生 ${esc(v.startup)}F${v.gadv ? `　ガード時 ${esc(v.gadv)}` : ""}${attrTag(v.attr)}</span>
       ${v.seg ? `<span class="badge" style="color:var(--good)">▶ 映像あり</span>` : ""}</div>
     <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm">${esc(v.name)}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
@@ -226,7 +274,7 @@ function openDetail(id) {
       <button class="btn" data-close>閉じる</button></div>
     ${media}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
-      <span class="note" style="margin-left:auto">${v.kind === "move" ? `${esc(v.cmd)} ${esc(v.cond)}` : `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
+      <span class="note" style="margin-left:auto">${v.kind === "move" ? `${cmdHTML(v.cmd)} ${esc(v.cond)}` : `${normalCmd(v)}　` + `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
     <label class="note">実況用の備考${edit ? "" : "（編集はデータ管理で編集モードをオンに）"}
       <textarea id="dNote" rows="3" ${edit ? "" : "readonly"} placeholder="例：中距離の飛び道具。弾を撒いて相手を動かす起点">${esc(v.note)}</textarea></label>
     ${edit ? `<div class="row"><label class="note row">ふりがな <input type="text" id="dKana" value="${esc(v.kana)}" style="width:260px"></label>
@@ -313,12 +361,12 @@ function renderQuiz() {
   let prompt = "";
   if (mode === "video" || mode === "say") prompt = `<video id="qv" src="${it.video}" autoplay loop muted playsinline></video>`;
   else if (mode === "note") prompt = `<div>${esc(it.note).replace(/\n/g, "<br>")}</div>`;
-  else if (mode === "cmd") prompt = `<div><div style="font-family:var(--display);font-size:30px">${esc(it.cmd)}</div><div class="note">${esc(it.cond)}</div></div>`;
+  else if (mode === "cmd") prompt = `<div><div style="font-family:var(--display);font-size:30px">${cmdHTML(it.cmd, { big: true })}</div><div class="note">${esc(it.cond)}</div></div>`;
   else if (mode === "kana") prompt = `<div><div style="font-family:var(--display);font-size:34px">${esc(it.name)}</div><div class="note">この技名の読みは？</div></div>`;
   else if (mode === "nName") prompt = `<div><div class="note">この通常技はどのボタン？</div><span class="kana" style="font-size:14px">${esc(it.kana)}</span><div style="font-family:var(--display);font-size:32px">${esc(it.name)}</div></div>`;
-  else if (mode === "nBtn") prompt = `<div><div class="note">この通常技の名前は？</div><div style="font-family:var(--display);font-size:38px">${esc(it.label)}</div></div>`;
+  else if (mode === "nBtn") prompt = `<div><div class="note">この通常技の名前は？</div><div style="font-family:var(--display);font-size:38px">${esc(it.label)}</div><div>${normalCmd(it)}</div></div>`;
   else if (mode === "nVideo") prompt = `<div class="ytbox"><div id="qyt"></div></div>`;
-  const answer = `<div class="answer"><div class="note">${esc(charName(it.cid))}／${esc(it.kind === "move" ? it.cat : "通常技 " + it.label)}${it.cmd ? "／" + esc(it.cmd) : ""} ${esc(it.cond || "")}</div>
+  const answer = `<div class="answer"><div class="note">${esc(charName(it.cid))}／${esc(it.kind === "move" ? it.cat : "通常技 " + it.label)}${it.cmd ? "／" + cmdHTML(it.cmd) : it.kind === "normal" ? "／" + normalCmd(it) : ""} ${esc(it.cond || "")}</div>
     <div class="bigkana">${esc(it.kana || "")}</div><div class="bigname">${esc(it.name)}</div>${it.note && mode !== "note" ? `<div style="margin-top:6px">${esc(it.note).replace(/\n/g, "<br>")}</div>` : ""}</div>`;
   const head = `<div class="qhead"><span>${esc(charName(it.cid))}</span><span>${Q.i + 1} / ${Q.list.length}　正解 ${Q.score}</span></div>`;
   if (mode === "say") {
@@ -396,7 +444,7 @@ function gRightHTML(mt) {
   const q = norm(G.q);
   const hk = hotkeysOf(sideCid);
   const items = itemsFor(sideCid).filter(v => !q || norm(v.name).includes(q) || norm(v.kana).includes(q) || norm(v.cmd || v.label).includes(q));
-  const pick = (v, k) => { const hi = hk.indexOf(v.id); return `<div class="pick ${k === 0 && q ? "first" : ""}" data-pick="${v.id}" role="button" tabindex="0"><span class="hk">${hi >= 0 ? hi + 1 : ""}</span><span>${esc(v.name)}</span><span class="c">${esc(v.kind === "move" ? v.cmd || v.cat : v.label)}</span><button class="star ${hi >= 0 ? "on" : ""}" data-star="${v.id}" title="1〜9キーに割り当て" aria-label="キーに割り当て">★</button></div>`; };
+  const pick = (v, k) => { const hi = hk.indexOf(v.id); return `<div class="pick ${k === 0 && q ? "first" : ""}" data-pick="${v.id}" role="button" tabindex="0"><span class="hk">${hi >= 0 ? hi + 1 : ""}</span><span>${esc(v.name)}</span><span class="c">${v.kind === "move" ? (v.cmd ? cmdHTML(v.cmd) : esc(v.cat)) : normalCmd(v)}</span><button class="star ${hi >= 0 ? "on" : ""}" data-star="${v.id}" title="1〜9キーに割り当て" aria-label="キーに割り当て">★</button></div>`; };
   const tags = (mt.tags || []).slice().sort((a, b) => a.t - b.t);
   return `${G.mode === "edit" ? `<div class="panel">
         <h2 style="margin:0">技名タグを付ける</h2>
@@ -654,12 +702,16 @@ function exportShared() {
   toast("shared.json を書き出しました。GitHubのファイルと差し替えてください", 4000);
 }
 
+/* 表記切り替え（ヘッダー） */
+function renderNotation() { const b = $("#notation"); if (!b) return; $$("button", b).forEach(x => x.setAttribute("aria-pressed", x.dataset.nt === (PREF.notation || "num"))); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-nt]"); if (!b) return; PREF.notation = b.dataset.nt; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
+
 /* ---------- 起動 ---------- */
 async function boot() {
   try { const r = await fetch("shared.json", { cache: "no-store" }); if (r.ok) { const j = await r.json(); SHARED = Object.assign(EMPTY(), j); } } catch (e) {}
   // 公開側に取り込まれた変更はローカルから外す（同じ内容なら）
   for (const k of ["notes", "nseg", "matches", "hotkeys"]) for (const id of Object.keys(LOCAL[k])) if (JSON.stringify(LOCAL[k][id]) === JSON.stringify(SHARED[k][id])) delete LOCAL[k][id];
-  commit(); route();
+  commit(); renderNotation(); route();
 }
 window.addEventListener("beforeunload", saveLastT);
 boot();
