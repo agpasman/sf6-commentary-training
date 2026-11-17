@@ -66,19 +66,23 @@ function cmdHTML(cmd, opt = {}) {
 }
 const NORMAL_PREFIX = { s: ["5", ""], c: ["2", "2"], j: ["j.", "ジャンプ中"], v: ["垂直j.", "垂直ジャンプ中"] };
 function normalCmd(v) {
-  const p = NORMAL_PREFIX[v.key[0]]; const btn = v.label.replace(/^(立ち|しゃがみ|垂直ジャンプ|ジャンプ)/, "");
+  const p = NORMAL_PREFIX[v.key[0]]; const btn = BTN_JA[v.key.slice(1)];
   return PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc(p[0] + btn);
 }
 
 /* ---------- データ索引 ---------- */
 const CHARS = DATA.chars;
 const CMAP = Object.fromEntries(CHARS.map(c => [c.id, c]));
+const POS_SHORT = { s: "立", c: "屈", j: "J", v: "垂直J" };
+const BTN_JA = { LP: "弱P", MP: "中P", HP: "強P", LK: "弱K", MK: "中K", HK: "強K" };
+CHARS.forEach(c => c.normals.forEach(n => { n.long = n.label; n.label = POS_SHORT[n.key[0]] + BTN_JA[n.key.slice(1)]; }));
 const ITEMS = {}; // id -> {item, cid, kind}
 CHARS.forEach(c => { c.moves.forEach(m => ITEMS[m.id] = { item: m, cid: c.id, kind: "move" }); c.normals.forEach(n => ITEMS[n.id] = { item: n, cid: c.id, kind: "normal" }); });
 const charName = id => CMAP[id]?.name || id;
 
 /* ---------- 保存（共有 shared.json ＋ このブラウザの変更） ---------- */
-const EMPTY = () => ({ notes: {}, nseg: {}, matches: {}, hotkeys: {}, deleted: {} });
+const KEYS = ["notes", "nseg", "matches", "hotkeys", "recipes"];
+const EMPTY = () => ({ notes: {}, nseg: {}, matches: {}, hotkeys: {}, recipes: {}, deleted: {}, deletedR: {} });
 let SHARED = EMPTY();
 let LOCAL = (() => { try { return Object.assign(EMPTY(), JSON.parse(localStorage.getItem(LS)) || {}); } catch (e) { return EMPTY(); } })();
 let PREF = (() => { try { return JSON.parse(localStorage.getItem(LS + "-pref")) || {}; } catch (e) { return {}; } })();
@@ -86,16 +90,17 @@ function savePref() { try { localStorage.setItem(LS + "-pref", JSON.stringify(PR
 function saveLocal() { try { localStorage.setItem(LS, JSON.stringify(LOCAL)); } catch (e) { toast("このブラウザに保存できませんでした"); } updatePills(); }
 function merged() {
   const o = EMPTY();
-  for (const k of ["notes", "nseg", "matches", "hotkeys"]) {
+  for (const k of KEYS) {
     o[k] = { ...SHARED[k] };
     for (const [id, v] of Object.entries(LOCAL[k] || {})) o[k][id] = (k === "notes" || k === "nseg") ? { ...(o[k][id] || {}), ...v } : v;
   }
   for (const id of Object.keys(LOCAL.deleted || {})) delete o.matches[id];
+  for (const id of Object.keys(LOCAL.deletedR || {})) delete o.recipes[id];
   return o;
 }
 let M = merged();
 function commit() { saveLocal(); M = merged(); }
-function hasLocalChanges() { return ["notes", "nseg", "matches", "hotkeys", "deleted"].some(k => Object.keys(LOCAL[k] || {}).length); }
+function hasLocalChanges() { return [...KEYS, "deleted", "deletedR"].some(k => Object.keys(LOCAL[k] || {}).length); }
 function updatePills() { $("#editPill").hidden = !PREF.edit; $("#dirtyPill").hidden = !hasLocalChanges(); }
 
 /* 技の表示用データ（共有の備考・ふりがな修正を反映） */
@@ -177,15 +182,15 @@ function judge(spoken, v) {
 }
 
 /* ---------- 画面切り替え ---------- */
-const TABS = ["zukan", "quiz", "match", "data"];
+const TABS = ["zukan", "combo", "quiz", "match", "data"];
 let TAB = "zukan";
 function route() {
   const t = (location.hash || "#zukan").slice(1); TAB = TABS.includes(t) ? t : "zukan";
   $$("nav a").forEach(a => a.setAttribute("aria-current", a.dataset.tab === TAB ? "page" : "false"));
-  cleanupMatch(); Mic.stop(); render();
+  cleanupMatch(); cleanupCombo(); Mic.stop(); render();
 }
 window.addEventListener("hashchange", route);
-function render() { ({ zukan: renderZukan, quiz: renderQuiz, match: renderMatch, data: renderData })[TAB](); updatePills(); }
+function render() { ({ zukan: renderZukan, combo: renderCombo, quiz: renderQuiz, match: renderMatch, data: renderData })[TAB](); updatePills(); }
 function charBar(cur, attr = "data-char", withAll = false) {
   return `<div class="charbar" role="tablist" aria-label="キャラ">${withAll ? `<button ${attr}="all" aria-current="${cur === "all"}">全キャラ</button>` : ""}${CHARS.map(c => `<button ${attr}="${c.id}" aria-current="${c.id === cur}">${esc(c.name)}</button>`).join("")}</div>`;
 }
@@ -243,7 +248,7 @@ function normalCard(v) {
     <div class="media" style="flex-direction:column;gap:2px"><span class="btnlabel">${esc(v.label)}</span><span class="cmd">${normalCmd(v)}</span>
       <span class="fd">発生 ${esc(v.startup)}F${v.gadv ? `　ガード時 ${esc(v.gadv)}` : ""}${attrTag(v.attr)}</span>
       ${v.seg ? `<span class="badge" style="color:var(--good)">▶ 映像あり</span>` : ""}</div>
-    <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm">${esc(v.name)}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
+    <div class="body"><span class="kana">${esc(v.kana || " ")}</span><span class="nm sub">${esc(v.name)}</span>${v.note ? `<span class="memo">${esc(v.note)}</span>` : ""}</div></button>`;
 }
 function setupLazyVideos() {
   if (io) io.disconnect();
@@ -271,8 +276,8 @@ function openDetail(id) {
   const media = v.kind === "move" ? `<video id="dv" src="${v.video}" autoplay loop muted playsinline controls></video>`
     : v.seg ? `<div class="ytbox"><div id="dyt"></div></div>` : `<div class="banner">この通常技の映像はまだありません。「データ管理」→「通常技の映像」でYouTubeの区間を登録できます。</div>`;
   openModal(`
-    <div class="row" style="justify-content:space-between"><div><span class="note">${esc(charName(v.cid))}／${esc(v.kind === "move" ? v.cat : "通常技 " + v.label)}</span>
-      <span class="kana" style="font-size:14px">${esc(v.kana)}</span><div class="bigname">${esc(v.name)}</div></div>
+    <div class="row" style="justify-content:space-between"><div><span class="note">${esc(charName(v.cid))}／${esc(v.kind === "move" ? v.cat : "通常技")}</span>
+      ${v.kind === "normal" ? `<div class="bigname">${esc(v.label)}</div><span class="kana" style="font-size:12px">${esc(v.kana)}</span><div>${esc(v.name)}</div>` : `<span class="kana" style="font-size:14px">${esc(v.kana)}</span><div class="bigname">${esc(v.name)}</div>`}</div>
       <button class="btn" data-close>閉じる</button></div>
     ${media}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
@@ -368,8 +373,8 @@ function renderQuiz() {
   else if (mode === "nName") prompt = `<div><div class="note">この通常技はどのボタン？</div><span class="kana" style="font-size:14px">${esc(it.kana)}</span><div style="font-family:var(--display);font-size:32px">${esc(it.name)}</div></div>`;
   else if (mode === "nBtn") prompt = `<div><div class="note">この通常技の名前は？</div><div style="font-family:var(--display);font-size:38px">${esc(it.label)}</div><div>${normalCmd(it)}</div></div>`;
   else if (mode === "nVideo") prompt = `<div class="ytbox"><div id="qyt"></div></div>`;
-  const answer = `<div class="answer"><div class="note">${esc(charName(it.cid))}／${esc(it.kind === "move" ? it.cat : "通常技 " + it.label)}${it.cmd ? "／" + cmdHTML(it.cmd) : it.kind === "normal" ? "／" + normalCmd(it) : ""} ${esc(it.cond || "")}</div>
-    <div class="bigkana">${esc(it.kana || "")}</div><div class="bigname">${esc(it.name)}</div>${it.note && mode !== "note" ? `<div style="margin-top:6px">${esc(it.note).replace(/\n/g, "<br>")}</div>` : ""}</div>`;
+  const answer = `<div class="answer"><div class="note">${esc(charName(it.cid))}／${esc(it.kind === "move" ? it.cat : "通常技")}${it.cmd ? "／" + cmdHTML(it.cmd) : it.kind === "normal" ? "／" + normalCmd(it) : ""} ${esc(it.cond || "")}</div>
+    ${it.kind === "normal" ? `<div class="bigname">${esc(it.label)}</div><div class="bigkana">${esc(it.kana || "")}</div><div>${esc(it.name)}</div>` : `<div class="bigkana">${esc(it.kana || "")}</div><div class="bigname">${esc(it.name)}</div>`}${it.note && mode !== "note" ? `<div style="margin-top:6px">${esc(it.note).replace(/\n/g, "<br>")}</div>` : ""}</div>`;
   const head = `<div class="qhead"><span>${esc(charName(it.cid))}</span><span>${Q.i + 1} / ${Q.list.length}　正解 ${Q.score}</span></div>`;
   if (mode === "say") {
     w.innerHTML = `<div class="quizwrap"><div class="qcard">${head}<div class="prompt">${prompt}</div>
@@ -446,7 +451,7 @@ function gRightHTML(mt) {
   const q = norm(G.q);
   const hk = hotkeysOf(sideCid);
   const items = itemsFor(sideCid).filter(v => !q || norm(v.name).includes(q) || norm(v.kana).includes(q) || norm(v.cmd || v.label).includes(q));
-  const pick = (v, k) => { const hi = hk.indexOf(v.id); return `<div class="pick ${k === 0 && q ? "first" : ""}" data-pick="${v.id}" role="button" tabindex="0"><span class="hk">${hi >= 0 ? hi + 1 : ""}</span><span>${esc(v.name)}</span><span class="c">${v.kind === "move" ? (v.cmd ? cmdHTML(v.cmd) : esc(v.cat)) : normalCmd(v)}</span><button class="star ${hi >= 0 ? "on" : ""}" data-star="${v.id}" title="1〜9キーに割り当て" aria-label="キーに割り当て">★</button></div>`; };
+  const pick = (v, k) => { const hi = hk.indexOf(v.id); return `<div class="pick ${k === 0 && q ? "first" : ""}" data-pick="${v.id}" role="button" tabindex="0"><span class="hk">${hi >= 0 ? hi + 1 : ""}</span><span>${v.kind === "normal" ? `<b>${esc(v.label)}</b> <small class="note">${esc(v.name)}</small>` : esc(v.name)}</span><span class="c">${v.kind === "move" ? (v.cmd ? cmdHTML(v.cmd) : esc(v.cat)) : normalCmd(v)}</span><button class="star ${hi >= 0 ? "on" : ""}" data-star="${v.id}" title="1〜9キーに割り当て" aria-label="キーに割り当て">★</button></div>`; };
   const tags = (mt.tags || []).slice().sort((a, b) => a.t - b.t);
   return `${G.mode === "edit" ? `<div class="panel">
         <h2 style="margin:0">技名タグを付ける</h2>
@@ -460,7 +465,7 @@ function gRightHTML(mt) {
       <div class="panel">
         <div class="row" style="justify-content:space-between"><h2 style="margin:0">タグ一覧（${tags.length}）</h2>
           <div class="row"><button class="btn small" id="gEdit">試合の編集</button><button class="btn small danger" id="gDel">削除</button></div></div>
-        <div class="taglist">${tags.map(t => { const v = view(t.ref); return `<div class="tag"><button class="t" data-seek="${t.t}">${fmt(t.t)}</button><span><span class="${t.side === 2 ? "s2" : "s1"}">P${t.side}</span> ${esc(v?.name || t.name)}</span>${G.mode === "edit" ? `<button class="btn small" data-deltag="${t.id}" aria-label="削除">✕</button>` : "<span></span>"}</div>`; }).join("") || `<div class="note">まだタグがありません</div>`}</div>
+        <div class="taglist">${tags.map(t => { const v = view(t.ref); return `<div class="tag"><button class="t" data-seek="${t.t}">${fmt(t.t)}</button><span><span class="${t.side === 2 ? "s2" : "s1"}">P${t.side}</span> ${esc(v ? (v.kind === "normal" ? v.label : v.name) : t.name)}</span>${G.mode === "edit" ? `<button class="btn small" data-deltag="${t.id}" aria-label="削除">✕</button>` : "<span></span>"}</div>`; }).join("") || `<div class="note">まだタグがありません</div>`}</div>
       </div>`;
 }
 function renderMatch() {
@@ -515,7 +520,7 @@ function capHTML(t, hidden) {
   const who = `P${t.side} ${charName(t.side === 2 ? mt.p2 : mt.p1)}`;
   if (hidden) return `<div class="cap ${t.side === 2 ? "p2" : ""}"><div class="who">${esc(who)}</div><div class="nm">？</div>${PREF.mic && SR ? `<div class="judge note">${esc(G.heard || "技名を言ってください…")}</div>` : `<div class="judge note">技名を言って <kbd>Enter</kbd></div>`}</div>`;
   const j = G.mode === "quiz" && PREF.mic && SR ? `<div class="judge ${G.judged ? "s1" : "s2"}">${G.judged ? "○ 正解" : `× 聞こえた言葉：${esc(G.heard || "（なし）")}`}</div>` : "";
-  return `<div class="cap ${t.side === 2 ? "p2" : ""}"><div class="who">${esc(who)}</div>${v?.kana ? `<div class="k">${esc(v.kana)}</div>` : ""}<div class="nm">${esc(v?.name || t.name)}</div>${v?.note && G.mode !== "edit" ? `<div class="memo">${esc(v.note.split("\n")[0])}</div>` : ""}${j}</div>`;
+  return `<div class="cap ${t.side === 2 ? "p2" : ""}"><div class="who">${esc(who)}</div>${v?.kind === "normal" ? `<div class="nm">${esc(v.label)}</div><div class="k">${esc(v.name)}</div>` : `${v?.kana ? `<div class="k">${esc(v.kana)}</div>` : ""}<div class="nm">${esc(v?.name || t.name)}</div>`}${v?.note && G.mode !== "edit" ? `<div class="memo">${esc(v.note.split("\n")[0])}</div>` : ""}${j}</div>`;
 }
 function loop() {
   let last = "", lastClock = "";
@@ -641,7 +646,7 @@ function renderData() {
   D.player?.destroy(); D.player = null;
   const s = M.nseg[D.char] || {}; const yt = ytParse(s.yt);
   const ns = normalsOf(D.char);
-  const counts = { notes: Object.keys(LOCAL.notes).length, matches: Object.keys(LOCAL.matches).length + Object.keys(LOCAL.deleted).length, nseg: Object.keys(LOCAL.nseg).length, hotkeys: Object.keys(LOCAL.hotkeys).length };
+  const counts = { notes: Object.keys(LOCAL.notes).length, matches: Object.keys(LOCAL.matches).length + Object.keys(LOCAL.deleted).length, nseg: Object.keys(LOCAL.nseg).length, hotkeys: Object.keys(LOCAL.hotkeys).length, recipes: Object.keys(LOCAL.recipes).length + Object.keys(LOCAL.deletedR).length };
   $("#main").innerHTML = `<div class="stack" style="max-width:1100px">
     <h1>データ管理</h1>
     <div class="panel">
@@ -651,7 +656,7 @@ function renderData() {
     </div>
     <div class="panel">
       <h2>変更を全員に反映する</h2>
-      <div class="note">このブラウザの未公開の変更：備考・ふりがな ${counts.notes}件／試合 ${counts.matches}件／通常技の映像 ${counts.nseg}キャラ／キー割り当て ${counts.hotkeys}キャラ</div>
+      <div class="note">このブラウザの未公開の変更：備考・ふりがな ${counts.notes}件／試合 ${counts.matches}件／通常技の映像 ${counts.nseg}キャラ／キー割り当て ${counts.hotkeys}キャラ／コンボレシピ ${counts.recipes}件</div>
       <div class="row"><button class="btn primary" id="eExport" ${hasLocalChanges() ? "" : "disabled"}>shared.json を書き出す</button>
         <label class="btn">shared.json を読み込む<input type="file" accept=".json,application/json" id="eImport" hidden></label>
         <button class="btn danger" id="eReset" ${hasLocalChanges() ? "" : "disabled"}>未公開の変更を捨てる</button></div>
@@ -695,10 +700,10 @@ document.addEventListener("change", e => {
   const t = e.target;
   if (t.id === "nYt") { const v = t.value.trim(); if (v && !ytParse(v)) { toast("YouTubeのURLとして読み取れませんでした"); return; } const cur = JSON.parse(JSON.stringify(M.nseg[D.char] || {})); cur.yt = v; LOCAL.nseg[D.char] = cur; commit(); renderData(); }
   if (t.dataset.nseg) { const v = t.value.trim(); const sec = v ? parseTime(v) : null; if (v && sec == null) { toast("時刻は 1:23.4 のように入れてください"); return; } setSeg(t.dataset.nseg, t.dataset.f, sec); }
-  if (t.id === "eImport") { const f = t.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); for (const k of ["notes", "nseg", "matches", "hotkeys"]) Object.assign(LOCAL[k], j[k] || {}); commit(); toast("読み込みました（このブラウザの変更として取り込みました）"); renderData(); }).catch(() => toast("JSONを読み込めませんでした")); }
+  if (t.id === "eImport") { const f = t.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); for (const k of KEYS) Object.assign(LOCAL[k], j[k] || {}); commit(); toast("読み込みました（このブラウザの変更として取り込みました）"); renderData(); }).catch(() => toast("JSONを読み込めませんでした")); }
 });
 function exportShared() {
-  const out = { version: 2, exportedAt: new Date().toISOString(), ...merged() }; delete out.deleted;
+  const out = { version: 2, exportedAt: new Date().toISOString(), ...merged() }; delete out.deleted; delete out.deletedR;
   const blob = new Blob([JSON.stringify(out, null, 1)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "shared.json"; document.body.appendChild(a); a.click(); a.remove();
   toast("shared.json を書き出しました。GitHubのファイルと差し替えてください", 4000);
@@ -712,7 +717,7 @@ document.addEventListener("click", e => { const b = e.target.closest("[data-nt]"
 async function boot() {
   try { const r = await fetch("shared.json", { cache: "no-store" }); if (r.ok) { const j = await r.json(); SHARED = Object.assign(EMPTY(), j); } } catch (e) {}
   // 公開側に取り込まれた変更はローカルから外す（同じ内容なら）
-  for (const k of ["notes", "nseg", "matches", "hotkeys"]) for (const id of Object.keys(LOCAL[k])) if (JSON.stringify(LOCAL[k][id]) === JSON.stringify(SHARED[k][id])) delete LOCAL[k][id];
+  for (const k of KEYS) for (const id of Object.keys(LOCAL[k] || {})) if (JSON.stringify(LOCAL[k][id]) === JSON.stringify(SHARED[k][id])) delete LOCAL[k][id];
   commit(); renderNotation(); route();
 }
 window.addEventListener("beforeunload", saveLastT);
