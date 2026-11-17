@@ -28,8 +28,10 @@ function arrowIcon(d) {
   return `<span class="ic dir" title="${d}"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><g transform="rotate(${ARROW_DEG[d]} 10 10)"><path class="fg" d="M4.5 10h8.2M9.6 6.2 13.6 10l-4 3.8" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g></svg></span>`;
 }
 function btnIcon(str, kind) {
-  const s = { "弱": "l", "中": "m", "強": "h" }[str] || "any";
-  return `<span class="ic btn ${kind === "P" ? "pu" : "ki"} ${s}" title="${str || ""}${kind}">${str ? `<small>${str}</small>` : ""}${kind}</span>`;
+  const lv = { "弱": "l", "中": "m", "強": "h" }[str] || "any";
+  const f = `${kind === "P" ? "punch" : "kick"}_${lv}`;
+  const label = `${str || ""}${kind === "P" ? "パンチ" : "キック"}`;
+  return `<img class="ic bimg" src="img/${f}.png" alt="${label}" title="${label}">`;
 }
 const ROT = `<span class="ic dir" title="1回転"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><path class="fg" d="M14.6 7.2A5.4 5.4 0 1 0 15 11" fill="none" stroke-width="2.2" stroke-linecap="round"/><path class="fg" d="M15.8 4.2v3.6h-3.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 function cmdHTML(cmd, opt = {}) {
