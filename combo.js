@@ -571,10 +571,10 @@ function splitTokens(line) {
   return out.filter(x => x.t);
 }
 /* 「溜め弱フリッカー」「弱溜めフリッカー」などの長押し版 */
-function parseToken(t) {
+function parseToken(t, cid) {
   const re1 = /^(溜め|ため|タメ|長押し)\s*/, re2 = /^(弱|中|強|OD|小|大)\s*(溜め|ため|タメ)\s*/i;
-  if (!re1.test(t) && !re2.test(t)) return parseToken0(t);
-  const r = parseToken0(t.replace(re1, "").replace(re2, "$1"));
+  if (!re1.test(t) && !re2.test(t)) return parseToken0(t, cid);
+  const r = parseToken0(t.replace(re1, "").replace(re2, "$1"), cid);
   if (r && r.type === "move") { const v = view(r.ref); const want = (r.str || "") + "溜め"; const opts = strOpts(v);
     if (opts.includes(want)) r.str = want; else if (!r.str) { const f = opts.find(o => /溜め$/.test(o)); if (f) r.str = f; } }
   return r;
