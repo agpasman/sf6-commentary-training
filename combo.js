@@ -38,7 +38,7 @@ const STRS = ["", "弱", "中", "強", "OD"];
 const COND_PRESETS = ["カウンター時", "パニカン時", "画面端", "画面中央", "DRC後", "ジャンプ攻撃から", "起き攻め", "SAゲージ必要", "Dゲージ必要", "相手がしゃがみ"];
 const NODE_W = 230, GAP_X = 70, GAP_Y = 40;
 
-const C = { char: null, sel: null, chart: null, dirty: false, picked: null, q: "", tab: "必殺技", drag: null, link: null, playId: 0, rate: 1.5 };
+const C = { zoom: null, char: null, sel: null, chart: null, dirty: false, picked: null, q: "", tab: "必殺技", drag: null, link: null, playId: 0, rate: 1.5 };
 
 function ensureSys() {
   if (ITEMS["sys-drc"]) return;
@@ -96,6 +96,12 @@ function prevMove(ch, id) {
   }
   return { node: null, conds, link };
 }
+/* 技カードのすぐ前に置かれた状況マス（その技がどう当たったか） */
+function condsBefore(ch, id) {
+  const out = []; let cur = id;
+  for (let g = 0; g < 20; g++) { const p = parentsOf(ch, cur)[0]; if (!p) break; const n = ch.nodes[p.from]; if (!n || n.type !== "cond") break; out.push(n.text || ""); cur = p.from; }
+  return out;
+}
 /* 状況マスに書かれた前提から、カウンター／パニカン扱いにするか */
 const condFlags = conds => ({ pc: conds.some(t => /パニ|PC|パニッシュ/i.test(t)), ch: conds.some(t => /カウンター|CH/i.test(t)) && !conds.some(t => /パニ/.test(t)), other: conds.some(t => /DRC|ドライブラッシュ|画面端|ジャンプ|追撃|壁/.test(t)) });
 function judgeNode(ch, id) {
@@ -104,17 +110,17 @@ function judgeNode(ch, id) {
   if (pm.assist) return { mark: "unk", text: "アシストコンボのあとは計算外（最後の段の技が分からないため）" };
   if (pm.opp) return { mark: "start", text: "相手の行動への対応" };
   if (!pm.node) return { mark: "start", text: "始動" };
-  const a = view(pm.node.ref), b = view(n.ref); const f = condFlags(pm.conds);
+  const a = view(pm.node.ref), b = view(n.ref); const hc = [...condsBefore(ch, pm.id), ...pm.conds]; const f = condFlags(hc); const an = nodeView(pm.node)?.sname || a?.name;
   if (!a || !b) return { mark: "unk", text: "判定できません" };
   if (a.kind === "sys" || b.kind === "sys") return { mark: "unk", text: "システム行動をはさむため計算外" };
   const r = rel(a, b, pm.node.str, n.str);
   if (r) {
     if (r.sit === "normal") return { mark: "ok", text: `つながる：${r.text}` };
-    if (r.sit === "ch" && (f.ch || f.pc)) return { mark: "okc", text: `前提（${pm.conds.join("・")}）でつながる：${r.text}` };
-    if (r.sit === "pc" && f.pc) return { mark: "okc", text: `前提（${pm.conds.join("・")}）でつながる：${r.text}` };
-    return { mark: "warn", text: `${SIT[r.sit]}ならつながる（状況マスで「${r.sit === "pc" ? "パニカン時" : "カウンター時"}」を入れると○）：${r.text}` };
+    if (r.sit === "ch" && (f.ch || f.pc)) return { mark: "okc", text: `「${an}」が${f.pc ? "パニカン" : "カウンター"}で当たった分の有利でつながる：${r.text}` };
+    if (r.sit === "pc" && f.pc) return { mark: "okc", text: `「${an}」がパニカンで当たった分の有利でつながる：${r.text}` };
+    return { mark: "warn", text: `${SIT[r.sit]}ならつながる（「${an}」の前に状況マス「${r.sit === "pc" ? "パニカン時" : "カウンター時"}」を置くと○）：${r.text}` };
   }
-  if (f.other) return { mark: "unk", text: `前提（${pm.conds.join("・")}）があるため計算外。実戦で確認してください` };
+  if (f.other) return { mark: "unk", text: `前提（${hc.join("・")}）があるため計算外。実戦で確認してください` };
   if (!isGround(a) || !isGround(b)) return { mark: "unk", text: "空中の技を含むため計算外（空中コンボ・着地コンボ）" };
   const ra = rowFor(a, pm.node.str);
   if (/D/.test(String(ra?.[4] || ""))) return { mark: "unk", text: "前の技でダウン・浮きが発生。追撃できるかはデータから計算できません" };
@@ -178,6 +184,7 @@ function routeSummary(ch, path) {
 function renderCombo() {
   ensureSys();
   if (!C.char) C.char = PREF.cChar || "ryu";
+  if (C.zoom == null) C.zoom = PREF.ccZoom || 1;
   const c = CMAP[C.char];
   const list = chartsOf(c.id);
   if (!C.sel || !M.recipes[C.sel] || M.recipes[C.sel].cid !== c.id) { C.sel = list[0]?.[0] || null; C.chart = null; C.picked = null; }
@@ -198,7 +205,7 @@ function emptyHTML() {
 function chartHTML() {
   const ch = C.chart; const rs = routes(ch);
   const ids = Object.keys(ch.nodes);
-  const W = Math.max(900, ...ids.map(id => { const n = ch.nodes[id]; return n.x + (n.w || NODE_W) * (n.s || 1) + 120; })); const H = Math.max(420, ...ids.map(id => { const n = ch.nodes[id]; return n.y + (n.h || 320) * (n.s || 1) + 60; }));
+  const W = Math.max(900, ...ids.map(id => { const n = ch.nodes[id]; return n.x + (n.w || NODE_W) + 120; })); const H = Math.max(420, ...ids.map(id => { const n = ch.nodes[id]; return n.y + (n.h || 320) + 60; }));
   const pk = C.picked && ch.nodes[C.picked];
   return `<div class="row" style="justify-content:space-between;align-items:flex-end">
       <input type="text" id="ccName" class="ccname" value="${esc(ch.name)}" placeholder="チャート名（例：屈中P始動 中央コンボ）" aria-label="チャート名">
@@ -215,11 +222,12 @@ function chartHTML() {
       <button class="btn" id="ccExport">書き出し（PNG・GIF・動画）</button>
       ${pk ? `<span class="note">選択中：<b>${esc(pk.type === "move" ? nodeView(pk)?.sname : pk.text)}</b>（追加すると、このカードの後ろにつながります）</span><button class="btn small" id="ccUnpick">選択を外す</button>` : `<span class="note">カードを選ぶと、その後ろに追加されます。右端の● をドラッグして別のカードに離すと線を引けます。</span>`}
     </div>
-    <div class="cccanvas" id="ccCanvas"><div class="ccinner" style="width:${W}px;height:${H}px">
+    <div class="cczoom"><button class="btn small" data-zoom="-">－</button><button class="btn small" data-zoom="1" title="100%に戻す">${Math.round((C.zoom || 1) * 100)}%</button><button class="btn small" data-zoom="+">＋</button><button class="btn small" data-zoom="fit">全体を表示</button><span class="note">Ctrl＋マウスホイールでも拡大・縮小できます</span></div>
+    <div class="cccanvas" id="ccCanvas"><div class="ccsizer" style="width:${W * (C.zoom || 1)}px;height:${H * (C.zoom || 1)}px"><div class="ccinner" data-w="${W}" data-h="${H}" style="width:${W}px;height:${H}px;transform:scale(${C.zoom || 1});transform-origin:0 0">
       <svg class="ccsvg" id="ccSvg" width="${W}" height="${H}"></svg>
       ${ids.map(id => nodeHTML(id)).join("")}
-    </div></div>
-    <div class="legend note"><span class="mk ok">○</span>つながる <span class="mk okc">○</span>前提ありでつながる <span class="mk warn">△</span>カウンター／パニカンならつながる <span class="mk unk">？</span>計算外（空中・ダウン後の追撃など） <span class="mk ng">✕</span>フレーム上つながらない　／ 印にマウスを乗せると理由が出ます</div>
+    </div></div></div>
+    <div class="legend note"><span class="mk ok">○</span>つながる <span class="mk okc">○</span>前提ありでつながる <span class="mk warn">△</span>カウンター／パニカンならつながる <span class="mk unk">？</span>計算外（空中・ダウン後の追撃など） <span class="mk ng">✕</span>フレーム上つながらない　／ 印にマウスを乗せると理由が出ます<br>※「パニカン時」「カウンター時」の状況マスは、<b>すぐ後ろの技1つ</b>（その技がパニカン・カウンターで当たった扱い）にだけ効きます。始動技の前に1回置けばOKで、2技目以降は毎回置く必要はありません。</div>
     <div class="panel"><h2 style="margin:0">ルートごとのまとめ（${rs.length}）</h2>
       ${rs.map((p, i) => { const s = routeSummary(ch, p); return `<div class="route">
         <div class="rtitle"><b>ルート${i + 1}</b>${s.pre.length ? `<span class="condpill">${s.pre.map(esc).join("・")}</span>` : ""} ${esc(s.names.join(" > "))}</div>
@@ -249,11 +257,10 @@ const MEMO_COLORS = ["#fff6c2", "#ffffff", "#ffd21f", "#ff5a6e", "#5fd0ff", "#7d
 function nst(n) {
   let s = `left:${n.x}px;top:${n.y}px;`;
   if (n.type === "memo" || n.type === "cond") { if (n.w) s += `width:${n.w}px;`; if (n.h && n.type === "memo") s += `height:${n.h}px;`; }
-  else if (n.s && n.s !== 1) s += `transform:scale(${n.s});transform-origin:0 0;`;
   return s;
 }
 function nodeHTML(id) {
-  const h = nodeHTML0(id); if (!h) return h;
+  const h = nodeHTML0(id); if (!h) return h; const t = C.chart.nodes[id].type; if (t !== "memo" && t !== "cond") return h;
   return h.replace(/<\/div>\s*$/, `<span class="rs" data-resize="${id}" title="ドラッグで大きさを変える"></span></div>`);
 }
 function memoHTML(id, n, sel) {
@@ -300,6 +307,7 @@ function nodeHTML0(id) {
   if (n.type === "cond") return `<div class="ccnode cond ${sel}" data-node="${id}" style="${nst(n)}">
       <div class="cchead" data-grip="${id}"><span>状況・前提</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
       <input type="text" class="condtext" data-cond="${id}" value="${esc(n.text || "")}" placeholder="例：パニカン時" list="condList">
+      ${(() => { const f = condFlags([n.text || ""]); return f.pc || f.ch ? `<div class="condhint">次の技<b>1つだけ</b>が${f.pc ? "パニカン" : "カウンター"}で当たった扱い（ヒット有利 +${f.pc ? 4 : 2}F）。その次からは通常ヒットで判定します。<b>始動技の前</b>に置いてください</div>` : ""; })()}
       <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span></div>`;
   const v = nodeView(n); if (!v) return "";
   const j = judgeNode(ch, id); const mk = j ? MARK[j.mark] : null;
@@ -307,11 +315,12 @@ function nodeHTML0(id) {
   const media = v.video ? `<video data-src="${v.video}" muted loop playsinline preload="none"></video>`
     : v.kind === "normal" ? `<div class="nmedia"><span class="btnlabel">${esc(v.label)}</span><span class="nbig">${nodeCmdHTML(v, true)}</span></div>`
     : `<span class="btnlabel">${esc(v.label || v.name)}</span>`;
-  const nv = PREF.ccNoVid;
-  return `<div class="ccnode ${nv ? "compact" : ""} ${sel}" data-node="${id}" style="${nst(n)}">
+  const nv = PREF.ccNoVid || (!v.video && v.kind !== "move");
+  return `<div class="ccnode ${nv ? "compact" : ""} ${v.kind === "normal" ? "nrm" : ""} ${sel}" data-node="${id}" style="${nst(n)}">
     <div class="cchead" data-grip="${id}"><span>${esc(v.kind === "normal" ? "通常技" : v.kind === "sys" ? "システム" : v.cat)}</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
     ${nv ? "" : `<div class="ccmedia" data-grip="${id}">${media}</div>`}
     <div class="ccbody" ${nv ? `data-grip="${id}"` : ""}>
+      ${(() => { const f = condFlags(condsBefore(ch, id)); return f.pc ? `<span class="hitpill pc">パニカンで当てる（ヒット+4F）</span>` : f.ch ? `<span class="hitpill ch">カウンターで当てる（ヒット+2F）</span>` : ""; })()}
       ${v.kana && v.kind !== "normal" ? `<span class="kana">${esc(v.kana)}</span>` : ""}
       <div class="ccnm">${esc(v.sname)}${v.kind === "normal" ? `<small>${esc(v.name)}</small>` : ""}</div>
       <div class="cccmd">${nodeCmdHTML(v, true)}</div>
@@ -325,7 +334,7 @@ function nodeHTML0(id) {
 function drawEdges(temp) {
   const svg = $("#ccSvg"); if (!svg || !C.chart) return;
   const ch = C.chart; const inner = $(".ccinner"); const box = inner.getBoundingClientRect(); const k = box.width / inner.offsetWidth || 1;
-  const rect = id => { const el = $(`[data-node="${id}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { l: (r.left - box.left) / k, r: (r.right - box.left) / k, t: (r.top - box.top) / k, h: r.height / k, s: ch.nodes[id]?.s || 1 }; };
+  const rect = id => { const el = $(`[data-node="${id}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { l: (r.left - box.left) / k, r: (r.right - box.left) / k, t: (r.top - box.top) / k, h: r.height / k, s: 1 }; };
   let out = "", labels = "";
   ch.edges.forEach((e, i) => {
     const a = rect(e.from), b = rect(e.to); if (!a || !b) return;
@@ -376,7 +385,7 @@ function pickerHTML() {
   const tabs = ["おすすめ", "通常技", "特殊技", "必殺技", "SA", "システム"];
   const q = norm(C.q);
   const pm = C.picked && ch.nodes[C.picked] ? (ch.nodes[C.picked].type === "move" ? { node: ch.nodes[C.picked], conds: [] } : prevMove(ch, C.picked)) : null;
-  const a = pm?.node ? view(pm.node.ref) : null; const f = condFlags(pm?.conds || []);
+  const a = pm?.node ? view(pm.node.ref) : null; const f = condFlags(pm?.node ? [...condsBefore(ch, pm.id || C.picked), ...(pm.conds || [])] : []);
   const all = [...normalsOf(c.id), ...movesOf(c.id), ...SYS_ITEMS.map(x => view(x.id))];
   let pool;
   if (q) pool = all.filter(v => norm(v.name).includes(q) || norm(v.kana).includes(q) || norm(v.label || "").includes(q) || norm(v.cmd || "").includes(q));
@@ -417,6 +426,7 @@ document.addEventListener("click", e => {
   const ad = t.closest("[data-adot]"); if (ad) { C.chart.nodes[ad.dataset.adot].n = +ad.dataset.k; touch(); rerenderChart(); return; }
   if (t.closest("#ccImport")) { openImport(); return; }
   if (t.closest("#impGo")) { runImport(); return; }
+  const zb = t.closest("[data-zoom]"); if (zb) { const k = zb.dataset.zoom; setZoom(k === "+" ? (C.zoom || 1) + 0.1 : k === "-" ? (C.zoom || 1) - 0.1 : k === "fit" ? fitZoom() : 1); return; }
   if (t.closest("#ccNoVid")) { PREF.ccNoVid = !PREF.ccNoVid; savePref(); rerenderChart(); return; }
   if (t.closest("#ccExport")) { openExport(); return; }
   const ms = t.closest("[data-mstyle]"); if (ms) { const n = C.chart.nodes[ms.dataset.mstyle]; n.style = n.style === "text" ? "box" : "text"; if (n.color === "#ffffff" || n.color === MEMO_COLORS[0]) delete n.color; touch(); rerenderChart(); return; }
@@ -467,7 +477,7 @@ document.addEventListener("pointerdown", e => {
   const h = e.target.closest("[data-handle]");
   if (h) { e.preventDefault(); C.link = { from: h.dataset.handle }; return; }
   const rz = e.target.closest("[data-resize]");
-  if (rz) { e.preventDefault(); const id = rz.dataset.resize, n = C.chart.nodes[id], el = $(`[data-node="${id}"]`); C.rsz = { id, sx: e.clientX, sy: e.clientY, w0: el.offsetWidth, h0: el.offsetHeight, s0: n.s || 1, free: n.type === "memo" || n.type === "cond" }; C.moved = true; return; }
+  if (rz) { e.preventDefault(); const id = rz.dataset.resize, el = $(`[data-node="${id}"]`); C.rsz = { id, sx: e.clientX, sy: e.clientY, w0: el.offsetWidth, h0: el.offsetHeight, free: true }; C.moved = true; return; }
   const g = e.target.closest("[data-grip]"); if (!g || e.target.closest("button,select,input,textarea")) return;
   const n = C.chart.nodes[g.dataset.grip]; if (!n) return;
   C.drag = { id: g.dataset.grip, sx: e.clientX, sy: e.clientY, x: n.x, y: n.y }; C.moved = false;
@@ -477,16 +487,15 @@ document.addEventListener("pointermove", e => {
   if (C.rsz) {
     const r = C.rsz, n = C.chart.nodes[r.id], el = $(`[data-node="${r.id}"]`), dx = e.clientX - r.sx, dy = e.clientY - r.sy;
     if (r.free) { n.w = Math.round(Math.min(900, Math.max(120, r.w0 + dx))); el.style.width = n.w + "px"; if (n.type === "memo") { n.h = Math.round(Math.min(900, Math.max(50, r.h0 + dy))); el.style.height = n.h + "px"; } }
-    else { const w = r.w0 * r.s0 + Math.max(dx, dy * r.w0 / r.h0); n.s = Math.round(Math.min(2.2, Math.max(0.6, w / r.w0)) * 100) / 100; el.style.transform = `scale(${n.s})`; el.style.transformOrigin = "0 0"; }
     drawEdges(); return;
   }
   if (C.drag) {
-    const d = C.drag, dx = e.clientX - d.sx, dy = e.clientY - d.sy; if (Math.abs(dx) + Math.abs(dy) > 4) C.moved = true; if (!C.moved) return;
+    const d = C.drag, z = C.zoom || 1, dx = (e.clientX - d.sx) / z, dy = (e.clientY - d.sy) / z; if (Math.abs(dx) + Math.abs(dy) > 4) C.moved = true; if (!C.moved) return;
     const n = C.chart.nodes[d.id]; n.x = Math.max(0, Math.round((d.x + dx) / 10) * 10); n.y = Math.max(0, Math.round((d.y + dy) / 10) * 10);
     const el = $(`[data-node="${d.id}"]`); if (el) { el.style.left = n.x + "px"; el.style.top = n.y + "px"; } drawEdges();
   } else if (C.link) {
     const box = $(".ccinner").getBoundingClientRect(); const a = $(`[data-node="${C.link.from}"]`).getBoundingClientRect();
-    drawEdges({ x1: a.right - box.left, y1: a.top - box.top + Math.min(a.height / 2, 90), x2: e.clientX - box.left, y2: e.clientY - box.top });
+    const z = C.zoom || 1; drawEdges({ x1: (a.right - box.left) / z, y1: (a.top - box.top) / z + Math.min(a.height / z / 2, 90), x2: (e.clientX - box.left) / z, y2: (e.clientY - box.top) / z });
   }
 });
 document.addEventListener("pointerup", e => {
@@ -670,7 +679,7 @@ const waitEv = (el, ev, ms = 4000) => new Promise(r => { const t = setTimeout(r,
 function exStage() {
   const inner = $(".ccinner"), cv = $("#ccCanvas"); const pad = 24;
   let x0 = 1e9, y0 = 1e9, x1 = 0, y1 = 0;
-  $$("#ccCanvas [data-node]").forEach(el => { const n = C.chart.nodes[el.dataset.node] || {}; const s = n.s || 1; x0 = Math.min(x0, el.offsetLeft); y0 = Math.min(y0, el.offsetTop); x1 = Math.max(x1, el.offsetLeft + el.offsetWidth * s + 10); y1 = Math.max(y1, el.offsetTop + el.offsetHeight * s); });
+  $$("#ccCanvas [data-node]").forEach(el => { const s = 1; x0 = Math.min(x0, el.offsetLeft); y0 = Math.min(y0, el.offsetTop); x1 = Math.max(x1, el.offsetLeft + el.offsetWidth * s + 10); y1 = Math.max(y1, el.offsetTop + el.offsetHeight * s); });
   const bw = x1 - x0, bh = y1 - y0; const k = Math.min(2, (innerWidth - pad * 2) / bw, (innerHeight - pad * 2) / bh);
   document.body.classList.add("exporting"); if (!EX.labels) document.body.classList.add("exnolabel");
   cv.style.cssText = `position:fixed;left:0;top:0;width:${Math.ceil(bw * k + pad * 2)}px;height:${Math.ceil(bh * k + pad * 2)}px;max-height:none;overflow:hidden;z-index:9999;border-radius:0`;
@@ -730,3 +739,25 @@ function exResult(blob, fname, kind) {
     <div class="expreview">${kind === "img" ? `<img src="${url}" alt="書き出したチャート">` : `<video src="${url}" controls autoplay loop muted></video>`}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn" data-close>閉じる</button><a class="btn primary" href="${url}" download="${esc(fname)}">保存する</a></div>`);
 }
+
+/* ---------- 画面の拡大・縮小 ---------- */
+function setZoom(z, ax, ay) {
+  const cv = $("#ccCanvas"), inner = $(".ccinner"), sz = $(".ccsizer"); if (!cv || !inner) return;
+  const old = C.zoom || 1; z = Math.round(Math.min(1.6, Math.max(0.3, z)) * 100) / 100; if (z === old) return;
+  const r = cv.getBoundingClientRect(); const px = ax ?? r.width / 2, py = ay ?? r.height / 2;
+  const cx = (cv.scrollLeft + px) / old, cy = (cv.scrollTop + py) / old;
+  C.zoom = z; PREF.ccZoom = z; savePref();
+  inner.style.transform = `scale(${z})`; sz.style.width = inner.dataset.w * z + "px"; sz.style.height = inner.dataset.h * z + "px";
+  cv.scrollLeft = cx * z - px; cv.scrollTop = cy * z - py;
+  const lb = $('[data-zoom="1"]'); if (lb) lb.textContent = Math.round(z * 100) + "%";
+}
+function fitZoom() {
+  const cv = $("#ccCanvas"); let x1 = 0, y1 = 0;
+  $$("#ccCanvas [data-node]").forEach(el => { x1 = Math.max(x1, el.offsetLeft + el.offsetWidth + 20); y1 = Math.max(y1, el.offsetTop + el.offsetHeight + 20); });
+  if (!x1) return 1; const z = Math.min(1, (cv.clientWidth - 10) / x1, (cv.clientHeight - 10) / y1); setTimeout(() => { cv.scrollLeft = 0; cv.scrollTop = 0; }, 0); return z;
+}
+document.addEventListener("wheel", e => {
+  if (!inCombo() || !C.chart || !(e.ctrlKey || e.metaKey)) return;
+  const cv = e.target.closest("#ccCanvas"); if (!cv) return;
+  e.preventDefault(); const r = cv.getBoundingClientRect(); setZoom((C.zoom || 1) * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - r.left, e.clientY - r.top);
+}, { passive: false });
