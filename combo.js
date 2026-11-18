@@ -54,6 +54,21 @@ function strOpts(v) {
 }
 const strLabel = s => /溜め$/.test(s) ? "溜め" + s.replace(/溜め$/, "") : s;
 const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強+])[PK]$/.test(ITEMS[v.id]?.item.cmd || "");
+/* ---------- モダン：SP入力と手動入力 ----------
+   SPボタンで出す必殺技・SAは強さが技ごとに固定（spStr）で、ダメージ80%。手動のコマンド入力なら強さを選べて100%。 */
+const isModern = () => PREF.ctrl === "modern";
+const inpOf = n => n.inp || PREF.mInp || "sp";
+const hasSP = v => v && v.kind === "move" && /SP/.test(ITEMS[v.id]?.item.mcmd || "");
+const usesSP = (n, v) => isModern() && hasSP(v) && (v.cat === "必殺技" || v.cat === "SA") && inpOf(n) === "sp";
+/* 実際に出る強さ（SP入力なら固定の強さ。OD・溜めは選んだまま） */
+function effStr(n, v) { v = v || view(n.ref); if (usesSP(n, v) && v.cat === "必殺技" && v.spStr && (!n.str || ["弱", "中", "強"].includes(n.str))) return v.spStr; return n.str || ""; }
+function manualCmd(v, str) {
+  let c = (M.notes[v.id]?.cmd ?? ITEMS[v.id]?.item.cmd) || ""; if (!c) return "";
+  const hold = /溜め$/.test(str || ""), b = (str || "").replace(/溜め$/, "");
+  const btn = b === "OD" ? "+攻撃+攻撃" : b ? "+" + b : "+攻撃";
+  c = c.replace(/(弱|中|強)?(PP|KK|P|K)(?=$|\s|（|\(|→)/, (m, st, pk) => pk.length === 2 ? "+攻撃+攻撃" : st ? "+" + st : btn);
+  return c + (hold ? "（長押し）" : "");
+}
 function nodeView(n) {
   const v = view(n.ref); if (!v) return null;
   let name = v.kind === "normal" ? v.label : v.name, cmd = v.kind === "sys" && PREF.ctrl === "modern" && v.mcmd ? v.mcmd : v.cmd;
@@ -62,6 +77,10 @@ function nodeView(n) {
     name = (hold ? "溜め" : "") + b + v.name;
     cmd = PREF.ctrl === "modern" ? (v.cmd ? v.cmd + (b === "OD" ? "+強" : "") : "") : v.cmd.replace(/([PK])$/, b === "OD" ? "$1+$1" : b + "$1");
     if (hold && cmd) cmd += "（長押し）";
+  }
+  if (isModern() && hasSP(v)) {
+    const st = n.str && strable(v) ? n.str : "";
+    cmd = inpOf(n) === "manual" ? manualCmd(v, st) : (ITEMS[v.id].item.mcmd || "") + (st.replace(/溜め$/, "") === "OD" ? "+強" : "") + (/溜め$/.test(st) ? "（長押し）" : "");
   }
   return { ...v, sname: name, scmd: cmd };
 }
@@ -121,7 +140,7 @@ function judgeNode(ch, id) {
   const a = view(pm.node.ref), b = view(n.ref); const hc = [...condsBefore(ch, pm.id), ...pm.conds]; const f = condFlags(hc); const an = nodeView(pm.node)?.sname || a?.name;
   if (!a || !b) return { mark: "unk", text: "判定できません" };
   if (a.kind === "sys" || b.kind === "sys") return { mark: "unk", text: "システム行動をはさむため計算外" };
-  const r = rel(a, b, pm.node.str, n.str);
+  const r = rel(a, b, effStr(pm.node, a), effStr(n, b));
   if (r) {
     if (r.sit === "normal") return { mark: "ok", text: `つながる：${r.text}` };
     if (r.sit === "ch" && (f.ch || f.pc)) return { mark: "okc", text: `「${an}」が${f.pc ? "パニカン" : "カウンター"}で当たった分の有利でつながる：${r.text}` };
@@ -162,7 +181,7 @@ function routeSummary(ch, path) {
   const table = [100, 100, 80, 70, 60, 50, 40, 30, 20, 10];
   moves.forEach((m, i) => {
     if (m.v.kind === "sys") { if (m.v.id === "sys-drc") drive += 3; if (m.v.id === "sys-di" || m.v.id === "sys-pdr") drive += 1; return; }
-    const r = rowFor(m.v, m.n.str); const d = fNum(r?.[7]) || 0; const sc = String(r?.[8] || "");
+    const r = rowFor(m.v, m.v.kind === "move" ? effStr(m.n, m.v) : m.n.str); const d = Math.round((fNum(r?.[7]) || 0) * (usesSP(m.n, m.v) ? 0.8 : 1)); const sc = String(r?.[8] || "");
     let mult = table[Math.min(i, 9)];
     if (i > 0) mult -= starter + extra;
     const imm = sc.match(/即時補正(\d+)/); if (imm) mult -= +imm[1];
@@ -245,7 +264,7 @@ function chartHTML() {
           ${s.memo.length ? `<span>起き攻め・その後：<b>${s.memo.map(esc).join("／")}</b></span>` : ""}
           ${s.bad ? `<span class="s2">要確認のつなぎ ${s.bad}か所</span>` : ""}${s.hasAssist ? `<span class="note">アシストコンボ分のダメージは含みません</span>` : ""}
           <button class="btn small" data-play="${i}">▶ 再生</button></div></div>`; }).join("") || `<p class="note">技を追加するとルートが出ます。</p>`}
-      <div class="note">ダメージは各技の公式ダメージに、コンボ補正（2ヒット目まで100%、3ヒット目80%から10%ずつ減少）と始動補正・即時補正・コンボ補正を当てはめた目安です。多段技は1ヒットとして計算し、SAの最低保証やDRCの補正は含めていません。</div>
+      <div class="note">ダメージは各技の公式ダメージに、コンボ補正（2ヒット目まで100%、3ヒット目80%から10%ずつ減少）と始動補正・即時補正・コンボ補正を当てはめた目安です。多段技は1ヒットとして計算し、モダンのSP入力で出した必殺技・SAは80%にしています（手動入力・アシストコンボ中は100%）。SAの最低保証やDRCの補正は含めていません。</div>
     </div>
     <datalist id="condList">${COND_PRESETS.map(p => `<option value="${p}"></option>`).join("")}</datalist>
     <label class="note">メモ（コツ・実況での言い方など）<textarea id="ccNote" rows="3">${esc(ch.note)}</textarea></label>`;
@@ -319,7 +338,7 @@ function nodeHTML0(id) {
       <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span></div>`;
   const v = nodeView(n); if (!v) return "";
   const j = judgeNode(ch, id); const mk = j ? MARK[j.mark] : null;
-  const r = rowFor(v, n.str); const dmg = fNum(r?.[7]); const st = fNum(r?.[1]);
+  const es = v.kind === "move" ? effStr(n, v) : n.str; const r = rowFor(v, es); const sp = usesSP(n, v); const dmg0 = fNum(r?.[7]); const dmg = dmg0 && sp ? Math.round(dmg0 * 0.8) : dmg0; const st = fNum(r?.[1]);
   const sg = vSeg(v, n.str);
   const media = v.video ? `<video data-src="${v.video}" ${sg ? `data-seg="${sg.join(",")}"` : ""} muted loop playsinline preload="none"></video>${sg ? `<span class="segtag ${n.str === "OD" ? "od" : ""}">${n.str === "OD" ? "OD版の映像" : v.vs[n.str] ? VS_LABEL[n.str] + "の映像" : "通常版の映像"}</span>` : ""}`
     : v.kind === "normal" ? `<div class="nmedia"><span class="btnlabel">${esc(v.label)}</span><span class="nbig">${nodeCmdHTML(v, true)}</span></div>`
@@ -333,10 +352,12 @@ function nodeHTML0(id) {
       ${v.kana && v.kind !== "normal" ? `<span class="kana">${esc(v.kana)}</span>` : ""}
       <div class="ccnm">${esc(v.sname)}${v.kind === "normal" ? `<small>${esc(v.name)}</small>` : ""}</div>
       <div class="cccmd">${nodeCmdHTML(v, true)}</div>
-      <div class="ccfoot"><span class="note">${st != null ? `発生${st}F` : ""}${dmg ? `・${dmg}ダメ` : ""}</span>
+      <div class="ccfoot"><span class="note">${st != null ? `発生${st}F` : ""}${dmg ? `・${dmg}ダメ${sp ? "<small>（SP 80%）</small>" : ""}` : ""}</span>
         ${strable(v) ? `<select data-str="${id}" aria-label="強さ">${strOpts(v).map(s => `<option value="${s}" ${s === (n.str || "") ? "selected" : ""}>${strLabel(s) || "強さ"}</option>`).join("")}</select>` : ""}
         ${mk && mk[0] ? `<span class="mk ${j.mark}" title="${esc(j.text)}" tabindex="0">${mk[0]}</span>` : ""}</div>
     </div>
+      ${isModern() && hasSP(v) ? `<div class="inprow"><button class="inpchip ${sp ? "sp" : "man"}" data-inp="${id}" title="押すとSP入力／手動入力を切り替え">${sp ? "SP入力" : "手動入力"}</button>
+        ${sp ? (v.cat === "必殺技" ? `<span class="note">SPだと<b>${v.spStr ? esc(v.spStr) + "版" : "強さ未確認"}</b>${n.str && ["弱", "中", "強"].includes(n.str) && v.spStr && n.str !== v.spStr ? `／<span class="s2">${esc(n.str)}版は手動入力で</span>` : ""}・ダメージ80%</span>` : `<span class="note">ダメージ80%</span>`) : `<span class="note">ダメージ100%</span>`}</div>` : ""}
     <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span>
   </div>`;
 }
@@ -436,6 +457,8 @@ document.addEventListener("click", e => {
   if (t.closest("#ccImport")) { openImport(); return; }
   if (t.closest("#impGo")) { runImport(); return; }
   const zb = t.closest("[data-zoom]"); if (zb) { const k = zb.dataset.zoom; setZoom(k === "+" ? (C.zoom || 1) + 0.1 : k === "-" ? (C.zoom || 1) - 0.1 : k === "fit" ? fitZoom() : 1); return; }
+  if (t.closest("#ccInp")) { PREF.mInp = (PREF.mInp || "sp") === "sp" ? "manual" : "sp"; savePref(); rerenderChart(); return; }
+  const ip = t.closest("[data-inp]"); if (ip) { const n = C.chart.nodes[ip.dataset.inp]; n.inp = inpOf(n) === "sp" ? "manual" : "sp"; touch(); rerenderChart(); return; }
   if (t.closest("#ccNoVid")) { PREF.ccNoVid = !PREF.ccNoVid; savePref(); rerenderChart(); return; }
   if (t.closest("#ccExport")) { openExport(); return; }
   const ms = t.closest("[data-mstyle]"); if (ms) { const n = C.chart.nodes[ms.dataset.mstyle]; n.style = n.style === "text" ? "box" : "text"; if (n.color === "#ffffff" || n.color === MEMO_COLORS[0]) delete n.color; touch(); rerenderChart(); return; }

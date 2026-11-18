@@ -402,3 +402,8 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding
 .ccmedia{position:relative}
 .segtag{position:absolute;left:6px;bottom:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.65);color:#ddd;pointer-events:none}
 .segtag.od{background:#7a3cff;color:#fff}
+.inprow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:0 10px 8px;font-size:11px}
+.inpchip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:0;cursor:pointer}
+.inpchip.sp{background:#7a3cff;color:#fff}
+.inpchip.man{background:#2b8a3e;color:#fff}
+.ccfoot small{font-size:10px;color:var(--muted)}

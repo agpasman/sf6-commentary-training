@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=M+PLUS+Rounded+1c:wght@500;800&family=Shippori+Mincho:wght@600&family=Yomogi&family=Reggae+One&family=DotGothic16&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261118-15">
+<link rel="stylesheet" href="style.css?v=20261118-16">
 </head>
 <body>
 <div class="app">
@@ -23,6 +23,7 @@
     </nav>
     <div class="hright">
       <div class="seg" id="ctrlmode" role="group" aria-label="操作タイプ"><button data-ct="classic" aria-pressed="true">クラシック</button><button data-ct="modern" aria-pressed="false">モダン</button></div>
+      <div class="seg" id="minp" role="group" aria-label="モダンの必殺技の入力" hidden><button data-mi="sp" aria-pressed="true" title="方向＋SPボタン（強さは技ごとに固定・ダメージ80%）">SP入力</button><button data-mi="manual" aria-pressed="false" title="コマンド＋弱中強（強さを選べる・ダメージ100%）">手動入力</button></div>
       <div class="seg" id="notation" role="group" aria-label="操作の表記"><button data-nt="num" aria-pressed="true" title="236P のような数字の表記">テンキー</button><button data-nt="icon" aria-pressed="false" title="矢印とボタンのアイコン表記">アイコン</button></div>
       <span class="pill" id="editPill" hidden>編集モード</span>
       <span class="pill warn" id="dirtyPill" hidden title="このブラウザに未公開の変更があります">未公開の変更あり</span>
@@ -32,9 +33,9 @@
 </div>
 <div class="modal" id="modal" role="dialog" aria-modal="true"><div class="dialog" id="dialog"></div></div>
 <div class="toast" id="toast" role="status"></div>
-<script src="data.js?v=20261118-15"></script>
-<script src="flow.js?v=20261118-15"></script>
-<script src="combo.js?v=20261118-15"></script>
-<script src="app.js?v=20261118-15"></script>
+<script src="data.js?v=20261118-16"></script>
+<script src="flow.js?v=20261118-16"></script>
+<script src="combo.js?v=20261118-16"></script>
+<script src="app.js?v=20261118-16"></script>
 </body>
 </html>

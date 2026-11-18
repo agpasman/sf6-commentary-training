@@ -115,7 +115,7 @@ function view(id) {
   const r = ITEMS[id]; if (!r) return null;
   const n = M.notes[id] || {};
   const mod = PREF.ctrl === "modern" && r.kind === "move";
-  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: mod ? (r.item.mcmd ?? "") : (n.cmd ?? r.item.cmd), cond: mod ? (r.item.mcond || (r.item.mcmd == null ? "（モダン操作の技表にない技）" : "")) : r.item.cond, note: n.note || "", ok: !!n.ok,
+  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: mod ? (PREF.mInp === "manual" && /SP/.test(r.item.mcmd || "") ? manualCmd({ id }, "") : (r.item.mcmd ?? "")) : (n.cmd ?? r.item.cmd), cond: mod ? (r.item.mcond || (r.item.mcmd == null ? "（モダン操作の技表にない技）" : "")) : r.item.cond, note: n.note || "", ok: !!n.ok,
     video: r.kind === "move" ? OFFICIAL_MOVIE(r.cid, r.item.code) : "", seg: r.kind === "normal" ? normalSeg(r.cid, r.item.key) : null };
 }
 function setNote(id, patch) { LOCAL.notes[id] = { ...(LOCAL.notes[id] || {}), ...patch }; commit(); }
@@ -797,8 +797,10 @@ function exportShared() {
 function renderNotation() {
   $$("#notation button").forEach(x => x.setAttribute("aria-pressed", x.dataset.nt === (PREF.notation || "num")));
   $$("#ctrlmode button").forEach(x => x.setAttribute("aria-pressed", x.dataset.ct === (PREF.ctrl || "classic")));
+  const mi = $("#minp"); if (mi) { mi.hidden = PREF.ctrl !== "modern"; $$("button", mi).forEach(x => x.setAttribute("aria-pressed", x.dataset.mi === (PREF.mInp || "sp"))); }
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-ct]"); if (!b) return; PREF.ctrl = b.dataset.ct; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-mi]"); if (!b) return; PREF.mInp = b.dataset.mi; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
 document.addEventListener("click", e => { const b = e.target.closest("[data-nt]"); if (!b) return; PREF.notation = b.dataset.nt; savePref(); renderNotation(); if (TAB === "match" && G.player) refreshMatchSide(); else render(); });
 
 /* ---------- 起動 ---------- */
