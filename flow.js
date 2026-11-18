@@ -13,7 +13,8 @@ const SIT = { normal: "通常ヒット", ch: "カウンター時", pc: "パニ�
 function fNum(x) { const m = String(x ?? "").replace(/[＋]/g, "+").replace(/[－−]/g, "-").match(/[+-]?\d+/); return m ? parseInt(m[0], 10) : null; }
 function rowFor(v, str) {
   const F = v?.frames || []; if (!F.length) return null;
-  if (str) { const r = F.find(x => (x[0] || "").replace(/\s/g, "").startsWith(str)); if (r) return r; }
+  if (str && /溜め$/.test(str)) { const base = str.replace(/溜め$/, ""); const r = F.find(x => { const t = (x[0] || "").replace(/\s/g, ""); return /ホールド/.test(t) && (base ? t.startsWith(base) : true) && (base === "OD" || !/^OD/.test(t)); }); if (r) return r; }
+  if (str) { const b = str.replace(/溜め$/, ""); const r = F.find(x => (x[0] || "").replace(/\s/g, "").startsWith(b)); if (r) return r; }
   return F.find(x => fNum(x[1]) != null) || F[0];
 }
 const isAirName = v => /ジャンプ中|空中|垂直|前ジャンプ/.test((v.cond || "") + (v.name || ""));
@@ -29,12 +30,14 @@ function isGround(v) {
 function rel(a, b, aStr, bStr) {
   if (!a || !b || a.kind === "sys" || b.kind === "sys") return null;
   // 派生技：b の出し方の条件に a の名前が入っていれば、a から派生でつながる（例：疾駆け → 弧空 → 武神鉾刃脚）
-  if (b.kind === "move" && a.kind === "move" && b.cond) {
-    const an = norm(a.name).replace(/^od/, ""); const bc = norm(b.cond);
+  // 出し方の条件は、モダン表示でも元（クラシック）の条件で見る
+  const aCond = a.kind === "move" ? (ITEMS[a.id]?.item.cond ?? a.cond) : "", bCond = b.kind === "move" ? (ITEMS[b.id]?.item.cond ?? b.cond) : "";
+  if (b.kind === "move" && a.kind === "move" && bCond) {
+    const an = norm(a.name).replace(/^od/, ""); const bc = norm(bCond);
     if (an.length >= 2 && bc.includes(an)) return { sit: "normal", type: "follow", text: `派生（${a.name}から）` };
   }
   // a の条件欄に「b に派生可能」と書かれている（例：ジュリ 歳破衝 → 暗剣殺）
-  if (b.kind === "move" && a.kind === "move" && a.cond && norm(a.cond).includes(norm(b.name)) && norm(b.name).length >= 2) return { sit: "normal", type: "follow", text: `派生（${a.name}の条件より）` };
+  if (b.kind === "move" && a.kind === "move" && aCond && norm(aCond).includes(norm(b.name)) && norm(b.name).length >= 2) return { sit: "normal", type: "follow", text: `派生（${a.name}の条件より）` };
   // ターゲットコンボ：特殊技のコマンドが「強P → 強K」のように a のボタンから始まる
   if (b.kind === "move" && b.cat === "特殊技" && a.kind === "normal" && /→/.test(ITEMS[b.id]?.item.cmd || "")) {
     const first = (ITEMS[b.id].item.cmd.split("→")[0] || "").replace(/\s/g, "");

@@ -817,6 +817,7 @@ boot();
 const VS_LABEL = { "": "通常", "弱": "弱", "中": "中", "強": "強", "OD": "OD" };
 function vSeg(v, str) {
   const s = v?.vs; if (!s) return null;
+  str = String(str || "").replace(/溜め$/, "");
   if (str && s[str]) return s[str];
   if (str === "OD") return null;
   return s[""] || s["弱"] || null;

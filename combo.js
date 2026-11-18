@@ -47,13 +47,21 @@ function ensureSys() {
 function cleanupCombo() { C.playId++; if (C.dirty) saveChart(); }
 
 /* 強さ（弱中強OD）を選べる技か：クラシックのコマンドの最後が強さ指定のないP/K */
+/* その技で選べる強さ（ボタン長押しで性質が変わる技は「溜め弱」なども） */
+function strOpts(v) {
+  const holds = []; (v?.frames || []).forEach(f => { const t = String(f[0] || "").replace(/\s/g, ""); if (!/ホールド/.test(t) || /^\(|^（|Lv/.test(t)) return; const m = t.match(/^(OD|弱|中|強)/); const k = (m ? m[1] : "") + "溜め"; if (m && !holds.includes(k)) holds.push(k); });
+  return [...STRS, ...holds];
+}
+const strLabel = s => /溜め$/.test(s) ? "溜め" + s.replace(/溜め$/, "") : s;
 const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強+])[PK]$/.test(ITEMS[v.id]?.item.cmd || "");
 function nodeView(n) {
   const v = view(n.ref); if (!v) return null;
   let name = v.kind === "normal" ? v.label : v.name, cmd = v.kind === "sys" && PREF.ctrl === "modern" && v.mcmd ? v.mcmd : v.cmd;
   if (n.str && strable(v)) {
-    name = n.str + v.name;
-    cmd = PREF.ctrl === "modern" ? (v.cmd ? v.cmd + (n.str === "OD" ? "+強" : "") : "") : v.cmd.replace(/([PK])$/, n.str === "OD" ? "$1+$1" : n.str + "$1");
+    const hold = /溜め$/.test(n.str), b = n.str.replace(/溜め$/, "");
+    name = (hold ? "溜め" : "") + b + v.name;
+    cmd = PREF.ctrl === "modern" ? (v.cmd ? v.cmd + (b === "OD" ? "+強" : "") : "") : v.cmd.replace(/([PK])$/, b === "OD" ? "$1+$1" : b + "$1");
+    if (hold && cmd) cmd += "（長押し）";
   }
   return { ...v, sname: name, scmd: cmd };
 }
@@ -326,7 +334,7 @@ function nodeHTML0(id) {
       <div class="ccnm">${esc(v.sname)}${v.kind === "normal" ? `<small>${esc(v.name)}</small>` : ""}</div>
       <div class="cccmd">${nodeCmdHTML(v, true)}</div>
       <div class="ccfoot"><span class="note">${st != null ? `発生${st}F` : ""}${dmg ? `・${dmg}ダメ` : ""}</span>
-        ${strable(v) ? `<select data-str="${id}" aria-label="強さ">${STRS.map(s => `<option value="${s}" ${s === (n.str || "") ? "selected" : ""}>${s || "強さ"}</option>`).join("")}</select>` : ""}
+        ${strable(v) ? `<select data-str="${id}" aria-label="強さ">${strOpts(v).map(s => `<option value="${s}" ${s === (n.str || "") ? "selected" : ""}>${strLabel(s) || "強さ"}</option>`).join("")}</select>` : ""}
         ${mk && mk[0] ? `<span class="mk ${j.mark}" title="${esc(j.text)}" tabindex="0">${mk[0]}</span>` : ""}</div>
     </div>
     <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span>
@@ -562,7 +570,16 @@ function splitTokens(line) {
   }
   return out.filter(x => x.t);
 }
-function parseToken(tok, cid) {
+/* 「溜め弱フリッカー」「弱溜めフリッカー」などの長押し版 */
+function parseToken(t) {
+  const re1 = /^(溜め|ため|タメ|長押し)\s*/, re2 = /^(弱|中|強|OD|小|大)\s*(溜め|ため|タメ)\s*/i;
+  if (!re1.test(t) && !re2.test(t)) return parseToken0(t);
+  const r = parseToken0(t.replace(re1, "").replace(re2, "$1"));
+  if (r && r.type === "move") { const v = view(r.ref); const want = (r.str || "") + "溜め"; const opts = strOpts(v);
+    if (opts.includes(want)) r.str = want; else if (!r.str) { const f = opts.find(o => /溜め$/.test(o)); if (f) r.str = f; } }
+  return r;
+}
+function parseToken0(tok, cid) {
   let t = tok.normalize("NFKC").trim();
   // 状況
   if (/^[\(（\[【].*[\)）\]】]$/.test(t)) t = t.slice(1, -1).trim();
