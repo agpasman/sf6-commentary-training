@@ -574,7 +574,13 @@ function splitTokens(line) {
 function parseToken(t, cid) {
   const re1 = /^(溜め|ため|タメ|長押し)\s*/, re2 = /^(弱|中|強|OD|小|大)\s*(溜め|ため|タメ)\s*/i;
   if (!re1.test(t) && !re2.test(t)) return parseToken0(t, cid);
-  const r = parseToken0(t.replace(re1, "").replace(re2, "$1"), cid);
+  const t2 = t.replace(re1, "").replace(re2, "$1"); let r = parseToken0(t2, cid);
+  // 溜めと書かれていたら、長押しで性質が変わる必殺技を優先（例：エドの「フリッカー」は立弱Kと同名）
+  if (!(r && r.type === "move" && strOpts(view(r.ref)).some(o => /溜め$/.test(o)))) {
+    const m = t2.match(/^(OD|EX|弱|中|強|小|大)?\s*(.+)$/i); const body = norm(m[2]); const pre = m[1] ? STR_MAP[m[1]] || STR_MAP[m[1].toUpperCase()] || "" : "";
+    const v = movesOf(cid).filter(x => strOpts(x).some(o => /溜め$/.test(o)) && norm(x.name).includes(body)).sort((a, b) => a.name.length - b.name.length)[0];
+    if (v) r = { type: "move", ref: v.id, str: pre };
+  }
   if (r && r.type === "move") { const v = view(r.ref); const want = (r.str || "") + "溜め"; const opts = strOpts(v);
     if (opts.includes(want)) r.str = want; else if (!r.str) { const f = opts.find(o => /溜め$/.test(o)); if (f) r.str = f; } }
   return r;
