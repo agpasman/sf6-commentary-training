@@ -6,13 +6,13 @@
 "use strict";
 
 const SYS_ITEMS = [
-  { id: "sys-drc", label: "DRC", name: "キャンセルドライブラッシュ", cmd: "中P+中K → 66" },
-  { id: "sys-pdr", label: "パリィラッシュ", name: "パリィドライブラッシュ", cmd: "中P+中K → 66" },
-  { id: "sys-di", label: "インパクト", name: "ドライブインパクト", cmd: "強P+強K" },
-  { id: "sys-dr", label: "リバーサル", name: "ドライブリバーサル", cmd: "6強P+強K" },
+  { id: "sys-drc", label: "DRC", name: "キャンセルドライブラッシュ", cmd: "中P+中K → 66", mcmd: "DP → 66" },
+  { id: "sys-pdr", label: "パリィラッシュ", name: "パリィドライブラッシュ", cmd: "中P+中K → 66", mcmd: "DP → 66" },
+  { id: "sys-di", label: "インパクト", name: "ドライブインパクト", cmd: "強P+強K", mcmd: "DI" },
+  { id: "sys-dr", label: "リバーサル", name: "ドライブリバーサル", cmd: "6強P+強K", mcmd: "6+DI" },
   { id: "sys-jump", label: "前ジャンプ", name: "前ジャンプ", cmd: "9" },
   { id: "sys-dash", label: "前ステップ", name: "前ステップ", cmd: "66" },
-  { id: "sys-throw", label: "投げ", name: "投げ", cmd: "弱P+弱K" },
+  { id: "sys-throw", label: "投げ", name: "投げ", cmd: "弱P+弱K", mcmd: "弱+中" },
 ];
 const LINKS = { "": "→", link: "目押し", cancel: "キャンセル", chain: "連打", tc: "TC", drc: "DRC", juggle: "追撃" };
 const STRS = ["", "弱", "中", "強", "OD"];
@@ -31,14 +31,16 @@ function cleanupCombo() { C.playId++; if (C.dirty) saveChart(); }
 const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強+])[PK]$/.test(ITEMS[v.id]?.item.cmd || "");
 function nodeView(n) {
   const v = view(n.ref); if (!v) return null;
-  let name = v.kind === "normal" ? v.label : v.name, cmd = v.cmd;
+  let name = v.kind === "normal" ? v.label : v.name, cmd = v.kind === "sys" && PREF.ctrl === "modern" && v.mcmd ? v.mcmd : v.cmd;
   if (n.str && strable(v)) {
     name = n.str + v.name;
     cmd = PREF.ctrl === "modern" ? (v.cmd ? v.cmd + (n.str === "OD" ? "+強" : "") : "") : v.cmd.replace(/([PK])$/, n.str === "OD" ? "$1+$1" : n.str + "$1");
   }
   return { ...v, sname: name, scmd: cmd };
 }
-const nodeCmdHTML = (sv, big) => sv.kind === "normal" ? (PREF.ctrl === "modern" ? (sv.mcmd ? cmdHTML(sv.mcmd, { big }) : esc(sv.label)) : cmdHTML(normalText(sv), { big })) : cmdHTML(sv.scmd || "", { big });
+const nodeCmdHTML = (sv, big) => sv.kind === "normal"
+  ? (PREF.ctrl === "modern" && sv.mcmd ? cmdHTML(sv.mcmd, { big }) : cmdHTML(normalText(sv), { big }) + (PREF.ctrl === "modern" ? `<span class="note" style="font-size:10px;margin-left:4px">クラシック表記</span>` : ""))
+  : cmdHTML(sv.scmd || "", { big });
 const normalText = sv => (sv.key[0] === "c" ? "2" : sv.key[0] === "s" ? "5" : "") + BTN_JA[sv.key.slice(1)];
 
 /* ---------- 保存と変換 ---------- */
@@ -69,6 +71,7 @@ function prevMove(ch, id) {
     const n = ch.nodes[p.from]; if (!n) return { node: null, conds, link };
     if (n.type === "move") return { node: n, id: p.from, conds, link };
     if (n.type === "cond") conds.push(n.text || "");
+    if (n.type === "assist") return { node: null, assist: true, conds, link };
     cur = p.from;
   }
   return { node: null, conds, link };
@@ -77,7 +80,9 @@ function prevMove(ch, id) {
 const condFlags = conds => ({ pc: conds.some(t => /パニ|PC|パニッシュ/i.test(t)), ch: conds.some(t => /カウンター|CH/i.test(t)) && !conds.some(t => /パニ/.test(t)), other: conds.some(t => /DRC|ドライブラッシュ|画面端|ジャンプ|追撃|壁/.test(t)) });
 function judgeNode(ch, id) {
   const n = ch.nodes[id]; if (!n || n.type !== "move") return null;
-  const pm = prevMove(ch, id); if (!pm.node) return { mark: "start", text: "始動" };
+  const pm = prevMove(ch, id);
+  if (pm.assist) return { mark: "unk", text: "アシストコンボのあとは計算外（最後の段の技が分からないため）" };
+  if (!pm.node) return { mark: "start", text: "始動" };
   const a = view(pm.node.ref), b = view(n.ref); const f = condFlags(pm.conds);
   if (!a || !b) return { mark: "unk", text: "判定できません" };
   if (a.kind === "sys" || b.kind === "sys") return { mark: "unk", text: "システム行動をはさむため計算外" };
@@ -106,7 +111,7 @@ function routes(ch) {
     kids.forEach(k => walk(k.to, p, new Set([...seen, id])));
   };
   roots.forEach(r => walk(r, [], new Set()));
-  return out.filter(p => p.some(id => ch.nodes[id]?.type === "move"));
+  return out.filter(p => p.some(id => ["move", "assist"].includes(ch.nodes[id]?.type)));
 }
 const SA_FLOOR = 0; // SAの最低保証は目安から外す
 function saLevel(v) {
@@ -142,7 +147,9 @@ function routeSummary(ch, path) {
   const memo = steps.filter(x => x.n.type === "cond" && path.indexOf(x.id) > path.indexOf(last?.id)).map(x => x.n.text).filter(Boolean);
   const pre = steps.filter(x => x.n.type === "cond" && path.indexOf(x.id) < path.indexOf(last?.id)).map(x => x.n.text).filter(Boolean);
   const bad = moves.map(m => judgeNode(ch, m.id)).filter(j => j && (j.mark === "ng" || j.mark === "warn")).length;
-  return { names: moves.map(m => m.v.sname), raw, scaled, drive, sa, ending, memo, pre, bad, count: moves.length };
+  const names = steps.filter(x => x.n.type === "move" || x.n.type === "assist").map(x => x.n.type === "assist" ? `${assistOf(x.n)?.[0] || "アシスト"}×${x.n.n || 1}段` : nodeView(x.n)?.sname).filter(Boolean);
+  const hasAssist = steps.some(x => x.n.type === "assist");
+  return { names, hasAssist, raw, scaled, drive, sa, ending, memo, pre, bad, count: moves.length };
 }
 
 /* ---------- 描画 ---------- */
@@ -164,7 +171,7 @@ function renderCombo() {
   if (C.chart) { drawEdges(); setupNodeVideos(); }
 }
 function emptyHTML() {
-  return `<h1>コンボチャート</h1><div class="banner">技のカード（公式映像・コマンド付き）を線でつないで、自分のコンボを図にできます。1つの技から線を2本出せば分岐も作れます。「パニカン時」「画面端」などの前提は状況マスに書けます。各ルートの合計ダメージ（目安）や、最後にダウンを取って起き攻めへ行けるかも自動で表示します。</div>`;
+  return `<div class="row" style="justify-content:space-between"><h1>コンボチャート</h1><button class="btn" id="ccImport">テキストから作る</button></div><div class="banner">技のカード（公式映像・コマンド付き）を線でつないで、自分のコンボを図にできます。1つの技から線を2本出せば分岐も作れます。「パニカン時」「画面端」などの前提は状況マスに書けます。各ルートの合計ダメージ（目安）や、最後にダウンを取って起き攻めへ行けるかも自動で表示します。</div>`;
 }
 function chartHTML() {
   const ch = C.chart; const rs = routes(ch);
@@ -178,6 +185,8 @@ function chartHTML() {
     <div class="cctool">
       <button class="btn primary" id="ccAddMove">＋ 技を追加</button>
       <button class="btn" id="ccAddCond">＋ 状況マス</button>
+      ${PREF.ctrl === "modern" && (CMAP[C.char]?.modernExtra || []).length ? `<button class="btn" id="ccAddAssist">＋ アシストコンボ</button>` : ""}
+      <button class="btn" id="ccImport">テキストから作る</button>
       ${pk ? `<span class="note">選択中：<b>${esc(pk.type === "move" ? nodeView(pk)?.sname : pk.text)}</b>（追加すると、このカードの後ろにつながります）</span><button class="btn small" id="ccUnpick">選択を外す</button>` : `<span class="note">カードを選ぶと、その後ろに追加されます。右端の● をドラッグして別のカードに離すと線を引けます。</span>`}
     </div>
     <div class="cccanvas" id="ccCanvas"><div class="ccinner" style="width:${W}px;height:${H}px">
@@ -192,15 +201,37 @@ function chartHTML() {
           <span>Dゲージ <b>${s.drive}</b>本</span><span>SA <b>${s.sa ? "Lv" + s.sa : "なし"}</b></span>
           <span class="${/ダウン/.test(s.ending) ? "s1" : ""}">${esc(s.ending || "—")}</span>
           ${s.memo.length ? `<span>起き攻め・その後：<b>${s.memo.map(esc).join("／")}</b></span>` : ""}
-          ${s.bad ? `<span class="s2">要確認のつなぎ ${s.bad}か所</span>` : ""}
+          ${s.bad ? `<span class="s2">要確認のつなぎ ${s.bad}か所</span>` : ""}${s.hasAssist ? `<span class="note">アシストコンボ分のダメージは含みません</span>` : ""}
           <button class="btn small" data-play="${i}">▶ 再生</button></div></div>`; }).join("") || `<p class="note">技を追加するとルートが出ます。</p>`}
       <div class="note">ダメージは各技の公式ダメージに、コンボ補正（2ヒット目まで100%、3ヒット目80%から10%ずつ減少）と始動補正・即時補正・コンボ補正を当てはめた目安です。多段技は1ヒットとして計算し、SAの最低保証やDRCの補正は含めていません。</div>
     </div>
     <datalist id="condList">${COND_PRESETS.map(p => `<option value="${p}"></option>`).join("")}</datalist>
     <label class="note">メモ（コツ・実況での言い方など）<textarea id="ccNote" rows="3">${esc(ch.note)}</textarea></label>`;
 }
+function assistOf(n) { const ex = CMAP[C.char]?.modernExtra || []; return ex[n.idx] || null; }
+function assistSteps(a) { return a ? a[1].split("→").length : 0; }
+/* アシストコンボの押し方：最初の入力（アイコン）＋「続けて ○ を n回」 */
+function assistHTML(a, n) {
+  if (!a) return "";
+  const first = a[1].split("→")[0].trim(); const btn = (a[1].match(/(弱|中|強)/) || [])[1] || "";
+  return `${cmdHTML(first, { big: true })}${n > 1 ? `<span class="ic txt">続けて</span>${cmdHTML(btn, { big: true })}<span class="ic txt" style="font-size:18px;color:var(--ink)">×${n - 1}</span>` : ""}`;
+}
 function nodeHTML(id) {
   const ch = C.chart, n = ch.nodes[id]; const sel = id === C.picked ? "picked" : "";
+  if (n.type === "assist") {
+    const a = assistOf(n); const max = assistSteps(a); const k = Math.min(n.n || 1, max || 1);
+    return `<div class="ccnode assist ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+      <div class="cchead" data-grip="${id}"><span>モダン：アシストコンボ</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
+      <div class="ccbody">
+        <div class="ccnm">${esc(a ? a[0] : "アシストコンボ")}</div>
+        <div class="dots" role="group" aria-label="何段目まで">${Array.from({ length: max }, (_, i) => `<button class="dot ${i < k ? "on" : ""}" data-adot="${id}" data-k="${i + 1}" aria-label="${i + 1}段目">${i + 1}</button>`).join("")}</div>
+        <div class="note"><b style="color:var(--ink)">${k}段目まで</b>（全${max}段）</div>
+        <div class="cccmd" style="flex-wrap:wrap;gap:2px">${assistHTML(a, k)}</div>
+        ${a && a[2] ? `<div class="note">${esc(a[2])}</div>` : ""}
+        <select data-aidx="${id}" aria-label="アシストコンボの種類">${(CMAP[C.char]?.modernExtra || []).map((x, i) => `<option value="${i}" ${i === n.idx ? "selected" : ""}>${esc(x[0])}</option>`).join("")}</select>
+      </div>
+      <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span></div>`;
+  }
   if (n.type === "cond") return `<div class="ccnode cond ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
       <div class="cchead" data-grip="${id}"><span>状況・前提</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
       <input type="text" class="condtext" data-cond="${id}" value="${esc(n.text || "")}" placeholder="例：パニカン時" list="condList">
@@ -208,7 +239,9 @@ function nodeHTML(id) {
   const v = nodeView(n); if (!v) return "";
   const j = judgeNode(ch, id); const mk = j ? MARK[j.mark] : null;
   const r = rowFor(v, n.str); const dmg = fNum(r?.[7]); const st = fNum(r?.[1]);
-  const media = v.video ? `<video data-src="${v.video}" muted loop playsinline preload="none"></video>` : `<span class="btnlabel">${esc(v.kind === "normal" ? v.label : v.label || v.name)}</span>`;
+  const media = v.video ? `<video data-src="${v.video}" muted loop playsinline preload="none"></video>`
+    : v.kind === "normal" ? `<div class="nmedia"><span class="btnlabel">${esc(v.label)}</span><span class="nbig">${nodeCmdHTML(v, true)}</span></div>`
+    : `<span class="btnlabel">${esc(v.label || v.name)}</span>`;
   return `<div class="ccnode ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
     <div class="cchead" data-grip="${id}"><span>${esc(v.kind === "normal" ? "通常技" : v.kind === "sys" ? "システム" : v.cat)}</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
     <div class="ccmedia" data-grip="${id}">${media}</div>
@@ -304,12 +337,18 @@ document.addEventListener("click", e => {
   const cc = t.closest("[data-cchar]"); if (cc) { if (C.dirty) saveChart(); C.char = cc.dataset.cchar; PREF.cChar = C.char; savePref(); C.sel = null; C.chart = null; renderCombo(); return; }
   const cl = t.closest("[data-chart]"); if (cl) { if (C.dirty) saveChart(); C.sel = cl.dataset.chart; C.chart = null; C.picked = null; renderCombo(); return; }
   if (t.closest("#ccNew")) { if (C.dirty) saveChart(); const id = "r" + uid(); LOCAL.recipes[id] = { v: 2, cid: C.char, name: "", note: "", nodes: {}, edges: [], createdAt: Date.now() }; delete LOCAL.deletedR[id]; commit(); C.sel = id; C.chart = null; C.picked = null; renderCombo(); C.tab = "通常技"; openPicker(); return; }
+  if (t.closest("#ccImport")) { openImport(); return; }
+  if (t.closest("#impGo")) { runImport(); return; }
   if (!C.chart) return;
   // 技選び（モーダル内）
   const pt = t.closest("[data-pktab]"); if (pt) { C.tab = pt.dataset.pktab; C.q = ""; $("#dialog").innerHTML = `<div class="wide"></div>${pickerHTML()}`; return; }
   const ar = t.closest("[data-addref]"); if (ar) { closeModal(); addNode({ type: "move", ref: ar.dataset.addref, str: "" }); return; }
   if (t.closest("#ccAddMove")) { C.tab = C.picked ? "おすすめ" : "通常技"; C.q = ""; openPicker(); return; }
   if (t.closest("#ccAddCond")) { addNode({ type: "cond", text: "" }); setTimeout(() => $(`[data-cond="${C.picked}"]`)?.focus(), 50); return; }
+  if (t.closest("#ccAddAssist")) { addNode({ type: "assist", idx: 0, n: 1 }); return; }
+  const ad = t.closest("[data-adot]"); if (ad) { C.chart.nodes[ad.dataset.adot].n = +ad.dataset.k; touch(); rerenderChart(); return; }
+  if (t.closest("#ccImport")) { openImport(); return; }
+  if (t.closest("#impGo")) { runImport(); return; }
   if (t.closest("#ccUnpick")) { C.picked = null; rerenderChart(); return; }
   const dl = t.closest("[data-del]"); if (dl) { const id = dl.dataset.del; delete C.chart.nodes[id]; C.chart.edges = C.chart.edges.filter(x => x.from !== id && x.to !== id); if (C.picked === id) C.picked = null; touch(); rerenderChart(); return; }
   const eg = t.closest("[data-edge]"); if (eg) { edgeMenu(+eg.dataset.edge); return; }
@@ -343,6 +382,7 @@ document.addEventListener("change", e => {
   if (!inCombo() || !C.chart) return;
   const t = e.target;
   if (t.dataset.str) { C.chart.nodes[t.dataset.str].str = t.value; touch(); rerenderChart(); }
+  if (t.dataset.aidx) { const n = C.chart.nodes[t.dataset.aidx]; n.idx = +t.value; n.n = 1; touch(); rerenderChart(); }
 });
 /* ドラッグで移動・線を引く */
 document.addEventListener("pointerdown", e => {
@@ -404,4 +444,108 @@ async function playRoute(path) {
       await new Promise(res => { el.onended = res; el.onerror = res; el.onplay = () => (el.playbackRate = C.rate); const iv = setInterval(() => { if (!alive()) { clearInterval(iv); res(); } }, 200); });
     } else await sleep(1200 / C.rate);
   }
+}
+
+/* =========================================================
+   テキストからチャートを作る
+   例：「2中P > 236強P」「屈中P→強波動拳」「cr.MP xx 236HP」「5LP 5LP 2MK xx DR 5HP」
+   1行が1ルート。行の頭が同じ技なら、そこから分岐として合流させる。
+   ========================================================= */
+const STR_MAP = { "弱": "弱", "中": "中", "強": "強", "小": "弱", "大": "強", L: "弱", M: "中", H: "強", l: "弱", m: "中", h: "強", OD: "OD", EX: "OD", od: "OD", ex: "OD" };
+function splitTokens(line) {
+  // 区切りの種類（キャンセルか）も残す
+  const out = []; let rest = line.trim(); let link = "";
+  const re = /^(.*?)(\s*(?:xx|XX|キャンセル|ｷｬﾝｾﾙ)\s*|\s*(?:>|＞|→|->|=>|⇒|▶|▸|,|、|，|~|〜|／|\/)\s*|\s+)/;
+  while (rest) {
+    const m = rest.match(re);
+    if (!m) { out.push({ t: rest, link }); break; }
+    if (m[1].trim()) out.push({ t: m[1].trim(), link });
+    link = /xx|XX|キャンセル|ｷｬﾝｾﾙ/.test(m[2]) ? "cancel" : "";
+    rest = rest.slice(m[0].length);
+  }
+  return out.filter(x => x.t);
+}
+function parseToken(tok, cid) {
+  let t = tok.normalize("NFKC").trim();
+  // 状況
+  if (/^[\(（\[【].*[\)）\]】]$/.test(t)) t = t.slice(1, -1).trim();
+  if (/^(PC|パニカン|パニッシュカウンター|パニッシュ|CH|カウンター|画面端|端|中央|画面中央|起き攻め|DI|インパクト|壁)$/i.test(t) && !/^(DI|インパクト)$/i.test(t)) return { type: "cond", text: t.replace(/^PC$/i, "パニカン時").replace(/^CH$/i, "カウンター時") };
+  // システム
+  const sysMap = [[/^(DRC|DR|ドライブラッシュ|ラッシュ|CDR|キャンセルラッシュ|キャンセルドライブラッシュ)$/i, "sys-drc"], [/^(PDR|パリィラッシュ|パリィドライブラッシュ|生ラッシュ)$/i, "sys-pdr"], [/^(DI|インパクト|ドライブインパクト)$/i, "sys-di"], [/^(前ステ|前ステップ|ダッシュ|66)$/i, "sys-dash"], [/^(前ジャンプ|ジャンプ|9)$/i, "sys-jump"], [/^(投げ|通常投げ)$/i, "sys-throw"]];
+  for (const [re, id] of sysMap) if (re.test(t)) return { type: "move", ref: id, str: "" };
+  const nm = normalsOf(cid), mv = movesOf(cid);
+  // 通常技：5中P 2MP cr.MP 屈中P 立ち強K j.HK J強P 小P 大K
+  let m = t.match(/^(5|2|8|j\.?|J\.?|ジャンプ|垂直J|立ち?|屈|しゃがみ|st\.?|s\.|cr\.?|c\.|n\.)?\s*(弱|中|強|小|大|L|M|H|l|m|h)\s*(P|K|p|k)$/);
+  if (m) {
+    const pos = !m[1] || /^(5|立|st|s\.|n\.)/i.test(m[1]) ? "s" : /^(2|屈|しゃがみ|cr|c\.)/i.test(m[1]) ? "c" : /垂直|8/.test(m[1]) ? "v" : "j";
+    const key = pos + { 弱: "L", 中: "M", 強: "H" }[STR_MAP[m[2]]] + m[3].toUpperCase();
+    const v = nm.find(x => x.key === key) || (pos === "v" ? nm.find(x => x.key === "j" + key.slice(1)) : null);
+    if (v) return { type: "move", ref: v.id, str: "" };
+  }
+  // コマンド表記：236HP 236強P 623PP 214K 41236P
+  m = t.match(/^((?:[1-9]){2,}|[1-9]?\[?[1-9]\]?[1-9])\s*(弱|中|強|小|大|L|M|H|OD|EX|l|m|h)?\s*(P|K|p|k)(P|K|p|k)?$/i);
+  if (m) {
+    const digits = m[1].replace(/[\[\]]/g, ""); const pk = m[3].toUpperCase(); const str = m[4] ? "OD" : (m[2] ? STR_MAP[m[2]] || STR_MAP[m[2].toUpperCase()] : "");
+    const cands = mv.filter(v => { const c = (ITEMS[v.id]?.item.cmd || "").replace(/\s/g, ""); return c === digits + pk || c === digits + "+" + pk; });
+    const v = cands.find(x => !isAirName(x)) || cands[0];
+    if (v) return { type: "move", ref: v.id, str };
+  }
+  // 技名：強波動拳 OD昇龍拳 EX波動 中足 など
+  m = t.match(/^(OD|EX|弱|中|強|小|大)?\s*(.+)$/i);
+  const pre = m && m[1] ? STR_MAP[m[1]] || STR_MAP[m[1].toUpperCase()] || "" : ""; const body = norm(m ? m[2] : t);
+  const ALIAS = { "中足": "cMK", "大足": "cHK", "小足": "cLK", "中パン": "sMP", "大パン": "sHP", "小パン": "sLP", "中k": "sMK", "強k": "sHK" };
+  for (const [k, key] of Object.entries(ALIAS)) if (norm(t) === norm(k)) { const v = nm.find(x => x.key === key); if (v) return { type: "move", ref: v.id, str: "" }; }
+  const all = [...mv, ...nm];
+  let v = all.find(x => norm(x.name) === body) || all.find(x => norm(x.kana) === body) || all.find(x => norm(x.label) === norm(t));
+  if (!v && body.length >= 2) v = mv.filter(x => norm(x.name).startsWith(body) || norm(x.name).includes(body)).sort((a, b) => a.name.length - b.name.length)[0];
+  if (v) return { type: "move", ref: v.id, str: v.kind === "move" && strable(v) ? pre : "" };
+  return { type: "cond", text: "？" + tok, unknown: true };
+}
+function parseText(text, cid) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+    const toks = splitTokens(line); const merged = [];
+    // 「OD 波動拳」「強 昇龍拳」のように強さだけ離れているものは次とくっつける
+    for (let i = 0; i < toks.length; i++) { if (/^(OD|EX|弱|中|強|大|小)$/i.test(toks[i].t) && toks[i + 1]) { merged.push({ t: toks[i].t + toks[i + 1].t, link: toks[i].link }); i++; } else merged.push(toks[i]); }
+    return merged.map(x => ({ ...parseToken(x.t, cid), link: x.link, src: x.t }));
+  });
+}
+function openImport() {
+  openModal(`<div class="wide"></div><div class="row" style="justify-content:space-between"><h2 style="margin:0">テキストからチャートを作る（${esc(CMAP[C.char].name)}）</h2><button class="btn" data-close>閉じる</button></div>
+    <div class="note">攻略サイトなどのコンボ表記を貼り付けてください。1行が1ルートで、行の頭が同じ技なら分岐としてまとめます。<br>
+    読める書き方の例：<code>2中P > 強波動拳</code>　<code>屈中P→236強P</code>　<code>cr.MP xx 236HP</code>　<code>5LP 5LP 2MK xx DR 5HP > 623PP</code>　<code>(PC) 立強P > 昇龍拳</code></div>
+    <textarea id="impText" rows="6" placeholder="例：&#10;2MP xx 236HP&#10;2MP xx DR 5HP > 623PP">${esc(C.impText || "")}</textarea>
+    <div class="row"><button class="btn" id="impPrev">読み取り結果を見る</button><label class="row note"><input type="checkbox" id="impAppend" ${C.chart ? "" : "disabled"}> 今のチャートに追加する</label><button class="btn primary" id="impGo">チャートを作る</button></div>
+    <div id="impOut"></div>`);
+  $("#impPrev").onclick = previewImport; $("#impText").focus();
+}
+function previewImport() {
+  const rows = parseText($("#impText").value, C.char); C.impText = $("#impText").value;
+  $("#impOut").innerHTML = rows.map((r, i) => `<div class="impline"><b>ルート${i + 1}</b> ${r.map(x => x.type === "cond" ? `<span class="condpill ${x.unknown ? "bad" : ""}">${esc(x.text)}</span>` : `<span class="imptok" title="元の表記：${esc(x.src)}">${x.link === "cancel" ? '<small>C</small>' : ""}${esc(nodeView(x)?.sname || x.src)}</span>`).join(" → ")}</div>`).join("") || `<p class="note">読み取れる技がありません</p>`;
+}
+function runImport() {
+  const text = $("#impText")?.value || ""; C.impText = text;
+  const rows = parseText(text, C.char); if (!rows.length) { toast("コンボの表記を貼り付けてください"); return; }
+  const append = $("#impAppend")?.checked && C.chart;
+  if (!append) { if (C.dirty) saveChart(); const id = "r" + uid(); C.sel = id; C.chart = { v: 2, cid: C.char, name: rows[0].filter(x => x.type === "move").slice(0, 3).map(x => nodeView(x)?.sname).join(" > "), note: "元の表記：\n" + text.trim(), nodes: {}, edges: [], createdAt: Date.now() }; C.chartId = id; }
+  const ch = C.chart; const baseY = Math.max(0, ...Object.values(ch.nodes).map(n => n.y + 330)); let row = 0;
+  const tree = []; // [{tok key, id, kids}]
+  rows.forEach(r => {
+    let level = tree, prevId = null, col = 0;
+    r.forEach(tok => {
+      const key = tok.type === "cond" ? "c:" + tok.text : tok.ref + "|" + tok.str;
+      let hit = level.find(x => x.key === key);
+      if (!hit) {
+        const id = "n" + uid(); const isNewRow = level !== tree && level.length > 0;
+        if (isNewRow || (level === tree && tree.length > 0 && col === 0)) row++;
+        ch.nodes[id] = tok.type === "cond" ? { type: "cond", text: tok.text, x: 30 + col * (NODE_W + GAP_X), y: baseY + row * 330 } : { type: "move", ref: tok.ref, str: tok.str || "", x: 30 + col * (NODE_W + GAP_X), y: baseY + row * 330 };
+        if (prevId) { let link = tok.link === "cancel" ? "cancel" : ""; if (!link && tok.type === "move") { const pm = prevMove({ ...ch, edges: [...ch.edges, { from: prevId, to: id }] }, id); const a = pm.node && view(pm.node.ref); const rr = a && rel(a, view(tok.ref), pm.node.str, tok.str); if (rr) link = rr.type === "link" ? "link" : rr.type === "chain" ? "chain" : "cancel"; } ch.edges.push({ from: prevId, to: id, link }); }
+        hit = { key, id, kids: [] }; level.push(hit);
+      }
+      prevId = hit.id; level = hit.kids; col++;
+    });
+  });
+  LOCAL.recipes[C.sel] = JSON.parse(JSON.stringify(ch)); delete LOCAL.deletedR[C.sel]; commit();
+  closeModal(); C.picked = null; renderCombo();
+  const unk = rows.flat().filter(x => x.unknown).length;
+  toast(unk ? `チャートを作りました。読み取れなかった表記が${unk}か所あります（「？」の状況マス）` : "チャートを作りました", 4000);
 }

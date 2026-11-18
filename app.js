@@ -70,9 +70,11 @@ function cmdHTML(cmd, opt = {}) {
 }
 const NORMAL_PREFIX = { s: ["5", ""], c: ["2", "2"], j: ["j.", "ジャンプ中"], v: ["垂直j.", "垂直ジャンプ中"] };
 function normalCmd(v) {
-  if (PREF.ctrl === "modern") return v.mcmd ? cmdHTML(v.mcmd) : `<span class="note">モダン：弱・中・強ボタン</span>`;
   const p = NORMAL_PREFIX[v.key[0]]; const btn = BTN_JA[v.key.slice(1)];
-  return PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc(p[0] + btn);
+  const classic = PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc(p[0] + btn);
+  // モダン：公式のモダン技表に載っている通常技だけモダンのコマンド。載っていないものはクラシック表記で表示
+  if (PREF.ctrl === "modern") return v.mcmd ? cmdHTML(v.mcmd) : `${classic}<span class="note" style="font-size:10px;margin-left:4px">クラシック表記</span>`;
+  return classic;
 }
 
 /* ---------- データ索引 ---------- */
