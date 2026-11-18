@@ -57,7 +57,7 @@ const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強
 /* ---------- モダン：SP入力と手動入力 ----------
    SPボタンで出す必殺技・SAは強さが技ごとに固定（spStr）で、ダメージ80%。手動のコマンド入力なら強さを選べて100%。 */
 const isModern = () => PREF.ctrl === "modern";
-const inpOf = n => n.inp || PREF.mInp || "sp";
+const inpOf = n => n.inp || "sp";
 const hasSP = v => v && v.kind === "move" && (!!ITEMS[v.id]?.item.msp || /SP/.test(ITEMS[v.id]?.item.mcmd || ""));
 const baseStr = s => String(s || "").replace(/溜め$/, "");
 /* SPで出すときの強さとコマンド（公式フレームデータのモダン表より）。null＝SPでは出せない */
@@ -100,7 +100,7 @@ function inpRowHTML(id, n, v, sp) {
       msg = `${what}${warn}・ダメージ80%${want === "manual" && noMan ? `<br><span class="s2">この技（この強さ）はモダンだと手動入力がないので、SPで出します</span>` : ""}`;
     }
   } else msg = "ダメージ100%";
-  return `<div class="inprow"><button class="inpchip ${sp ? "sp" : "man"}" data-inp="${id}" title="押すとSP入力／手動入力を切り替え">${want === "sp" ? "SP入力" : "手動入力"}</button><span class="note">${msg}</span></div>`;
+  return `<div class="inprow"><span class="inpseg" role="group" aria-label="この技の入力方法"><button class="${want === "sp" ? "on sp" : ""}" data-inpset="${id}" data-v="sp" aria-pressed="${want === "sp"}">SP</button><button class="${want === "manual" ? "on man" : ""}" data-inpset="${id}" data-v="manual" aria-pressed="${want === "manual"}">手動</button></span><span class="note">${msg}</span></div>`;
 }
 function manualCmd(v, str) {
   let c = (M.notes[v.id]?.cmd ?? ITEMS[v.id]?.item.cmd) || ""; if (!c) return "";
@@ -499,8 +499,7 @@ document.addEventListener("click", e => {
   if (t.closest("#ccImport")) { openImport(); return; }
   if (t.closest("#impGo")) { runImport(); return; }
   const zb = t.closest("[data-zoom]"); if (zb) { const k = zb.dataset.zoom; setZoom(k === "+" ? (C.zoom || 1) + 0.1 : k === "-" ? (C.zoom || 1) - 0.1 : k === "fit" ? fitZoom() : 1); return; }
-  if (t.closest("#ccInp")) { PREF.mInp = (PREF.mInp || "sp") === "sp" ? "manual" : "sp"; savePref(); rerenderChart(); return; }
-  const ip = t.closest("[data-inp]"); if (ip) { const n = C.chart.nodes[ip.dataset.inp]; n.inp = inpOf(n) === "sp" ? "manual" : "sp"; touch(); rerenderChart(); return; }
+  const ip = t.closest("[data-inpset]"); if (ip) { C.chart.nodes[ip.dataset.inpset].inp = ip.dataset.v; touch(); rerenderChart(); return; }
   if (t.closest("#ccNoVid")) { PREF.ccNoVid = !PREF.ccNoVid; savePref(); rerenderChart(); return; }
   if (t.closest("#ccExport")) { openExport(); return; }
   const ms = t.closest("[data-mstyle]"); if (ms) { const n = C.chart.nodes[ms.dataset.mstyle]; n.style = n.style === "text" ? "box" : "text"; if (n.color === "#ffffff" || n.color === MEMO_COLORS[0]) delete n.color; touch(); rerenderChart(); return; }
