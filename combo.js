@@ -58,7 +58,7 @@ function nodeView(n) {
   return { ...v, sname: name, scmd: cmd };
 }
 const nodeCmdHTML = (sv, big) => sv.kind === "normal"
-  ? (PREF.ctrl === "modern" && sv.mcmd ? cmdHTML(sv.mcmd, { big }) : cmdHTML(normalText(sv), { big }) + (PREF.ctrl === "modern" ? `<span class="note" style="font-size:10px;margin-left:4px">クラシック表記</span>` : ""))
+  ? (PREF.ctrl === "modern" ? ((sv.mcmd || sv.mnorm) ? cmdHTML(sv.mcmd || sv.mnorm, { big }) : `<span class="note">モダンでは出せない</span>`) : cmdHTML(normalText(sv), { big }))
   : cmdHTML(sv.scmd || "", { big });
 const normalText = sv => (sv.key[0] === "c" ? "2" : "") + BTN_JA[sv.key.slice(1)];
 

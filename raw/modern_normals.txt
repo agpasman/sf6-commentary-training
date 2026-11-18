@@ -1,0 +1,32 @@
+ryu#sLP>弱|sLK>AUTO+弱|sMP>中|sHP>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+luke#sLP>弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+jamie#sLP>弱|sMP>中|sMK>AUTO+中|sHP>強|sHK>AUTO+強|cLP>2+弱|cLK>AUTO+弱|cMK>2+中|cHP>2+強|jLP>AUTO+弱|jLK>弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+chunli#sLP>弱|sLK>AUTO+弱|sMP>中|sHP>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強|vHK>強
+guile#sLP>弱|sLK>AUTO+弱 → 弱 → 弱|sMP>AUTO強|sMK>中|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+kimberly#sLP>弱|sMP>中|sMK>AUTO+中|sHP>強|sHK>AUTO+強|cLP>2+弱|cLK>AUTO+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+juri#sLP>2+弱 → 弱|sLK>弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強|vHK>AUTO+強
+ken#sLP>弱|sLK>AUTO+弱|sMP>AUTO+中|sMK>中|sHP>AUTO+強|sHK>強|cLP>弱 or 2+弱 → 2+弱|cLK>2+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強|vHK>強
+blanka#sLP>弱|sLK>AUTO+弱|sMK>中|sHP>AUTO+強|sHK>強|cLP>AUTO+弱 → 弱|cLK>2+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強|vHP>AUTO+強
+dhalsim#sLP>弱|sMP>中|sHP>強|sHK>AUTO+強|cLP>1+弱 → 2+弱|cLK>2+弱|cMP>AUTO+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強
+ehonda#sLP>弱|sMP>中|sHP>強|sHK>AUTO+強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強|vHP>強
+deejay#sLP>弱|sLK>AUTO+弱|sMP>中|sHK>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>AUTO+弱|jLK>弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+manon#sLP>弱|sLK>AUTO+弱|sMP>中|sMK>AUTO+中|sHP>強|cLK>2+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+marisa#sLP>弱|sMP>AUTO+中|sMK>中|sHP>強|cLP>2+弱|cLK>AUTO+弱|cMP>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強
+jp#sLP>弱|sMK>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>AUTO+中|jMK>中|jHP>AUTO+強|jHK>強
+zangief#sLP>AUTO+弱 → 弱|sLK>弱|sMP>中|sHP>強|cLP>2+弱|cLK>AUTO+弱|cMP>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+lily#sLP>弱 → 弱|sLK>弱|sMP>中|sHP>強|cLP>2+弱|cLK>AUTO+弱|cMP>2+中|cMK>AUTO+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+cammy#sLP>弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+rashid#sLP>弱|sMP>AUTO+中|sMK>中|sHP>AUTO+強|sHK>強|cLP>AUTO+弱|cLK>2+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+aki#sLP>弱|sMP>AUTO+中|sMK>中|sHP>強|sHK>AUTO+強|cLP>2+弱|cLK>AUTO+弱|cMK>2+中|cHK>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強
+ed#sLP>AUTO+弱|sLK>弱|sMP>AUTO+中|sMK>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cMP>2+中|cHK>2+強|jLP>弱|jLK>AUTO+弱|jMP>AUTO+中|jMK>中|jHP>AUTO+強|jHK>強
+gouki_akuma#sLP>弱|sLK>AUTO+弱|sMP>AUTO+中|sMK>中|sHP>強|sHK>AUTO+強|cLP>2+弱 → 2+弱|cLK>2+弱|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+vega_mbison#sLP>弱|sMP>AUTO+強|sMK>中|sHP>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+terry#sLP>弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>AUTO+弱|jLK>弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+mai#sLP>AUTO+弱 → AUTO+弱|sLK>弱|sMK>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+elena#sLK>弱|sMP>中|sMK>AUTO+強|sHP>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+sagat#sLP>2+弱 → 弱|sLK>弱|sMK>中|sHP>強|sHK>AUTO+強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+cviper#sLP>弱|sLK>AUTO+弱|sMK>中|sHP>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>強|jHK>AUTO+強|vHK>AUTO+強
+alex#sLP>弱|sLK>AUTO+弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+ingrid#sLP>AUTO+弱|sLK>弱|sMP>AUTO+強|sMK>中|sHK>強|cLP>2+弱 → 2+弱|cLK>2+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+yasmine#sLP>2+弱 → 弱|sLK>弱|sMP>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>AUTO+中|cMK>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強
+arjun#sLP>弱|sMP>AUTO+中|sMK>中|sHP>AUTO+強|sHK>強|cLP>2+弱|cLK>AUTO+弱|cMP>2+中|cHP>2+強|jLP>弱|jLK>AUTO+弱|jMP>中|jMK>AUTO+中|jHP>AUTO+強|jHK>強

@@ -73,7 +73,7 @@ function normalCmd(v) {
   const p = NORMAL_PREFIX[v.key[0]]; const btn = BTN_JA[v.key.slice(1)];
   const classic = PREF.notation === "icon" ? cmdHTML((p[1] || "") + btn) : esc((v.key[0] === "s" ? "" : p[0]) + btn);
   // モダン：公式のモダン技表に載っている通常技だけモダンのコマンド。載っていないものはクラシック表記で表示
-  if (PREF.ctrl === "modern") return v.mcmd ? cmdHTML(v.mcmd) : `${classic}<span class="note" style="font-size:10px;margin-left:4px">クラシック表記</span>`;
+  if (PREF.ctrl === "modern") { const mc = v.mcmd || v.mnorm; return mc ? (PREF.notation === "icon" ? cmdHTML(mc) : esc(mc)) : `<span class="note">モダンでは出せない</span>`; }
   return classic;
 }
 
