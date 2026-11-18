@@ -58,10 +58,50 @@ const strable = v => v && v.kind === "move" && v.cat !== "SA" && /(^|[^弱中強
    SPボタンで出す必殺技・SAは強さが技ごとに固定（spStr）で、ダメージ80%。手動のコマンド入力なら強さを選べて100%。 */
 const isModern = () => PREF.ctrl === "modern";
 const inpOf = n => n.inp || PREF.mInp || "sp";
-const hasSP = v => v && v.kind === "move" && /SP/.test(ITEMS[v.id]?.item.mcmd || "");
-const usesSP = (n, v) => isModern() && hasSP(v) && (v.cat === "必殺技" || v.cat === "SA") && inpOf(n) === "sp";
-/* 実際に出る強さ（SP入力なら固定の強さ。OD・溜めは選んだまま） */
-function effStr(n, v) { v = v || view(n.ref); if (usesSP(n, v) && v.cat === "必殺技" && v.spStr && (!n.str || ["弱", "中", "強"].includes(n.str))) return v.spStr; return n.str || ""; }
+const hasSP = v => v && v.kind === "move" && (!!ITEMS[v.id]?.item.msp || /SP/.test(ITEMS[v.id]?.item.mcmd || ""));
+const baseStr = s => String(s || "").replace(/溜め$/, "");
+/* SPで出すときの強さとコマンド（公式フレームデータのモダン表より）。null＝SPでは出せない */
+function spPick(v, str) {
+  const sp = ITEMS[v?.id]?.item.msp; if (!sp) return null; const b = baseStr(str);
+  if (b === "OD") return sp.OD != null ? { k: "OD", c: sp.OD } : null;
+  if (b && sp[b] != null) return { k: b, c: sp[b] };
+  if (!b && sp[""] != null) return { k: "", c: sp[""] };
+  const ks = ["弱", "中", "強"].filter(k => sp[k] != null);
+  if (ks.length) { const k = ks.length === 1 ? ks[0] : ks.includes("中") ? "中" : ks[0]; return { k, c: sp[k] }; }
+  return sp[""] != null ? { k: "", c: sp[""] } : null;
+}
+/* 手動入力のコマンド。undefined＝データなし、null＝モダンでは手動入力できない */
+function manPick(v, str) {
+  const mm = ITEMS[v?.id]?.item.mman; if (!mm) return ITEMS[v?.id]?.item.msp ? null : undefined; const b = baseStr(str);
+  if (mm[b] != null) return { k: b, c: mm[b] };
+  if (!b) { const k = ["中", "弱", "強", ""].find(k => mm[k] != null); return k !== undefined ? { k, c: mm[k] } : null; }
+  if (b !== "OD" && mm[""] != null) return { k: "", c: mm[""] };
+  return null;
+}
+const spStrs = v => { const sp = ITEMS[v?.id]?.item.msp || {}; return ["弱", "中", "強"].filter(k => sp[k] != null); };
+/* 実際にSPボタンで出すことになるか（手動入力を選んでも、その強さに手動入力が無ければSP） */
+const usesSP = (n, v) => isModern() && hasSP(v) && (v.cat === "必殺技" || v.cat === "SA") && (inpOf(n) === "sp" || (v.cat === "必殺技" && manPick(v, n.str) === null));
+/* 実際に出る強さ */
+function effStr(n, v) {
+  v = v || view(n.ref); const hold = /溜め$/.test(n.str || "") ? "溜め" : "";
+  if (!isModern() || !hasSP(v) || v.cat !== "必殺技") return n.str || "";
+  if (usesSP(n, v)) { const p = spPick(v, n.str); return p ? (p.k || baseStr(n.str)) + (p.k === baseStr(n.str) ? hold : "") : n.str || ""; }
+  return n.str || "";
+}
+function inpRowHTML(id, n, v, sp) {
+  const want = inpOf(n), b = baseStr(n.str), ss = spStrs(v), noMan = v.cat === "必殺技" && manPick(v, n.str) === null;
+  let msg;
+  if (sp) {
+    if (v.cat !== "必殺技") msg = "ダメージ80%";
+    else {
+      const p = spPick(v, n.str);
+      const what = ss.length > 1 ? `SPは方向で${ss.join("・")}を出し分け` : ss.length === 1 ? `SPだと<b>${ss[0]}版</b>` : "SP（強さの区別なし）";
+      const warn = b && b !== "OD" && p && p.k && p.k !== b ? `／<span class="s2">${esc(b)}版は${manPick(v, b) ? "手動入力で" : "モダンでは出せません"}</span>` : b === "OD" && !p ? `／<span class="s2">OD版はSPでは出せません</span>` : "";
+      msg = `${what}${warn}・ダメージ80%${want === "manual" && noMan ? `<br><span class="s2">この技（この強さ）はモダンだと手動入力がないので、SPで出します</span>` : ""}`;
+    }
+  } else msg = "ダメージ100%";
+  return `<div class="inprow"><button class="inpchip ${sp ? "sp" : "man"}" data-inp="${id}" title="押すとSP入力／手動入力を切り替え">${want === "sp" ? "SP入力" : "手動入力"}</button><span class="note">${msg}</span></div>`;
+}
 function manualCmd(v, str) {
   let c = (M.notes[v.id]?.cmd ?? ITEMS[v.id]?.item.cmd) || ""; if (!c) return "";
   const hold = /溜め$/.test(str || ""), b = (str || "").replace(/溜め$/, "");
@@ -80,7 +120,10 @@ function nodeView(n) {
   }
   if (isModern() && hasSP(v)) {
     const st = n.str && strable(v) ? n.str : "";
-    cmd = inpOf(n) === "manual" ? manualCmd(v, st) : (ITEMS[v.id].item.mcmd || "") + (st.replace(/溜め$/, "") === "OD" ? "+強" : "") + (/溜め$/.test(st) ? "（長押し）" : "");
+    const hold = /溜め$/.test(st) ? "（長押し）" : "";
+    if (!usesSP(n, v)) { const mp = manPick(v, st); cmd = mp ? mp.c + hold : manualCmd(v, st); }
+    else { const p = spPick(v, st); cmd = p ? p.c + hold : (ITEMS[v.id].item.mcmd || "") + (baseStr(st) === "OD" ? "+強" : "") + hold; }
+    if (n.str && strable(v)) { const es = effStr(n, v); name = (/溜め$/.test(es) ? "溜め" : "") + baseStr(es) + v.name; }
   }
   return { ...v, sname: name, scmd: cmd };
 }
@@ -356,8 +399,7 @@ function nodeHTML0(id) {
         ${strable(v) ? `<select data-str="${id}" aria-label="強さ">${strOpts(v).map(s => `<option value="${s}" ${s === (n.str || "") ? "selected" : ""}>${strLabel(s) || "強さ"}</option>`).join("")}</select>` : ""}
         ${mk && mk[0] ? `<span class="mk ${j.mark}" title="${esc(j.text)}" tabindex="0">${mk[0]}</span>` : ""}</div>
     </div>
-      ${isModern() && hasSP(v) ? `<div class="inprow"><button class="inpchip ${sp ? "sp" : "man"}" data-inp="${id}" title="押すとSP入力／手動入力を切り替え">${sp ? "SP入力" : "手動入力"}</button>
-        ${sp ? (v.cat === "必殺技" ? `<span class="note">SPだと<b>${v.spStr ? esc(v.spStr) + "版" : "強さ未確認"}</b>${n.str && ["弱", "中", "強"].includes(n.str) && v.spStr && n.str !== v.spStr ? `／<span class="s2">${esc(n.str)}版は手動入力で</span>` : ""}・ダメージ80%</span>` : `<span class="note">ダメージ80%</span>`) : `<span class="note">ダメージ100%</span>`}</div>` : ""}
+      ${isModern() && hasSP(v) ? inpRowHTML(id, n, v, sp) : ""}
     <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span>
   </div>`;
 }

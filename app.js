@@ -115,7 +115,7 @@ function view(id) {
   const r = ITEMS[id]; if (!r) return null;
   const n = M.notes[id] || {};
   const mod = PREF.ctrl === "modern" && r.kind === "move";
-  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: mod ? (PREF.mInp === "manual" && /SP/.test(r.item.mcmd || "") ? manualCmd({ id }, "") : (r.item.mcmd ?? "")) : (n.cmd ?? r.item.cmd), cond: mod ? (r.item.mcond || (r.item.mcmd == null ? "（モダン操作の技表にない技）" : "")) : r.item.cond, note: n.note || "", ok: !!n.ok,
+  return { ...r.item, cid: r.cid, kind: r.kind, kana: n.kana ?? r.item.kana, cmd: mod ? (PREF.mInp === "manual" && r.item.mman ? (manPick({ id }, "")?.c || "").replace(/\+(弱|中|強)$/, "+攻撃") || r.item.mcmd || "" : (r.item.mcmd ?? "")) : (n.cmd ?? r.item.cmd), cond: mod ? (r.item.mcond || (r.item.mcmd == null ? "（モダン操作の技表にない技）" : "")) : r.item.cond, note: n.note || "", ok: !!n.ok,
     video: r.kind === "move" ? OFFICIAL_MOVIE(r.cid, r.item.code) : "", seg: r.kind === "normal" ? normalSeg(r.cid, r.item.key) : null };
 }
 function setNote(id, patch) { LOCAL.notes[id] = { ...(LOCAL.notes[id] || {}), ...patch }; commit(); }
@@ -357,6 +357,7 @@ function openDetail(id) {
       ${v.kind === "normal" ? `<div class="bigname">${esc(v.label)}</div><span class="kana" style="font-size:12px">${esc(v.kana)}</span><div>${esc(v.name)}</div>` : `<span class="kana" style="font-size:14px">${esc(v.kana)}</span><div class="bigname">${esc(v.name)}</div>`}</div>
       <button class="btn" data-close>閉じる</button></div>
     ${media}
+    ${v.kind === "move" && PREF.ctrl === "modern" && (v.msp || v.mman) ? modernInputsHTML(v) : ""}
     ${v.kind === "move" && v.vs ? `<div class="row"><span class="note">映像の区間</span><button class="btn small" data-dvs="all" aria-pressed="true">全部</button>${Object.keys(v.vs).filter(k => k !== "" || !v.vs["弱"]).map(k => `<button class="btn small" data-dvs="${k}" aria-pressed="false">${VS_LABEL[k]}</button>`).join("")}<span class="note">（公式映像の黒いコマの位置から自動で切り分け）</span></div>` : ""}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
       <span class="note" style="margin-left:auto">${v.kind === "move" ? `${cmdHTML(v.cmd)} ${esc(v.cond)}` : `${normalCmd(v)}　` + `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
@@ -841,4 +842,12 @@ function segPlay(el, seg, loop = true, onEnd) {
   // 最後まで再生し終わったときなどは requestVideoFrameCallback が来ないので、保険で見張る
   const iv = setInterval(() => { if (!on || !el.isConnected) return clearInterval(iv); if (el.ended || (!el.paused && el.currentTime >= b - 0.03) || el.currentTime < a - 0.3) check(); }, 150);
   el._segStop = () => { on = false; clearInterval(iv); el._segStop = null; };
+}
+
+/* 技の詳細：モダンの入力（強さごとのSP入力・手動入力。公式フレームデータより） */
+function modernInputsHTML(v) {
+  const keys = ["弱", "中", "強", "", "OD"].filter(k => v.msp?.[k] != null || v.mman?.[k] != null);
+  const cell = c => c == null ? `<span class="note">—</span>` : (PREF.notation === "icon" ? cmdHTML(c) : esc(c));
+  return `<div class="panel"><b>モダンの入力</b> <span class="note">（SP入力はダメージ80%、手動入力は100%。—はその入力では出せません）</span>
+    <table class="ftable mtable"><thead><tr><th>強さ</th><th>SP入力</th><th>手動入力</th></tr></thead><tbody>${keys.map(k => `<tr><th>${k || "—"}</th><td>${cell(v.msp?.[k])}</td><td>${cell(v.mman?.[k])}</td></tr>`).join("")}</tbody></table></div>`;
 }
