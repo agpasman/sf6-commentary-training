@@ -312,7 +312,8 @@ function nodeHTML0(id) {
   const v = nodeView(n); if (!v) return "";
   const j = judgeNode(ch, id); const mk = j ? MARK[j.mark] : null;
   const r = rowFor(v, n.str); const dmg = fNum(r?.[7]); const st = fNum(r?.[1]);
-  const media = v.video ? `<video data-src="${v.video}" muted loop playsinline preload="none"></video>`
+  const sg = vSeg(v, n.str);
+  const media = v.video ? `<video data-src="${v.video}" ${sg ? `data-seg="${sg.join(",")}"` : ""} muted loop playsinline preload="none"></video>${sg ? `<span class="segtag ${n.str === "OD" ? "od" : ""}">${n.str === "OD" ? "OD版の映像" : v.vs[n.str] ? VS_LABEL[n.str] + "の映像" : "通常版の映像"}</span>` : ""}`
     : v.kind === "normal" ? `<div class="nmedia"><span class="btnlabel">${esc(v.label)}</span><span class="nbig">${nodeCmdHTML(v, true)}</span></div>`
     : `<span class="btnlabel">${esc(v.label || v.name)}</span>`;
   const nv = PREF.ccNoVid || (!v.video && v.kind !== "move");
@@ -349,7 +350,7 @@ function drawEdges(temp) {
 let ccIO = null;
 function setupNodeVideos() {
   if (ccIO) ccIO.disconnect();
-  ccIO = new IntersectionObserver(es => es.forEach(e => { const v = e.target; if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); } else v.pause(); }), { rootMargin: "80px" });
+  ccIO = new IntersectionObserver(es => es.forEach(e => { const v = e.target; if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; if (v.dataset.seg && !v._segStop) segPlay(v, v.dataset.seg.split(",").map(Number)); v.play().catch(() => {}); } else v.pause(); }), { rootMargin: "80px" });
   $$("#ccCanvas video[data-src]").forEach(v => ccIO.observe(v));
 }
 function rerenderChart() { const keep = $("#ccCanvas"); const sx = keep?.scrollLeft, sy = keep?.scrollTop; $("#ccMain").innerHTML = chartHTML(); drawEdges(); setupNodeVideos(); const c = $("#ccCanvas"); if (c) { c.scrollLeft = sx || 0; c.scrollTop = sy || 0; } renderSideList(); }
@@ -536,7 +537,8 @@ async function playRoute(path) {
     $("#prOv").innerHTML = `<div class="cap"><div class="nm">${esc(v.sname)}</div><div class="k">${nodeCmdHTML(v)}</div></div>`;
     if (v.video) {
       const el = document.createElement("video"); el.src = v.video; el.muted = true; el.playsInline = true; el.autoplay = true; stage.prepend(el); el.playbackRate = C.rate;
-      await new Promise(res => { el.onended = res; el.onerror = res; el.onplay = () => (el.playbackRate = C.rate); const iv = setInterval(() => { if (!alive()) { clearInterval(iv); res(); } }, 200); });
+      const sg = vSeg(v, it.n.str);
+      await new Promise(res => { if (sg) segPlay(el, sg, false, res); el.onended = res; el.onerror = res; el.onplay = () => (el.playbackRate = C.rate); const iv = setInterval(() => { if (!alive()) { clearInterval(iv); res(); } }, 200); });
     } else await sleep(1200 / C.rate);
   }
 }

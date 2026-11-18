@@ -357,6 +357,7 @@ function openDetail(id) {
       ${v.kind === "normal" ? `<div class="bigname">${esc(v.label)}</div><span class="kana" style="font-size:12px">${esc(v.kana)}</span><div>${esc(v.name)}</div>` : `<span class="kana" style="font-size:14px">${esc(v.kana)}</span><div class="bigname">${esc(v.name)}</div>`}</div>
       <button class="btn" data-close>閉じる</button></div>
     ${media}
+    ${v.kind === "move" && v.vs ? `<div class="row"><span class="note">映像の区間</span><button class="btn small" data-dvs="all" aria-pressed="true">全部</button>${Object.keys(v.vs).filter(k => k !== "" || !v.vs["弱"]).map(k => `<button class="btn small" data-dvs="${k}" aria-pressed="false">${VS_LABEL[k]}</button>`).join("")}<span class="note">（公式映像の黒いコマの位置から自動で切り分け）</span></div>` : ""}
     <div class="row">${v.kind === "move" || v.seg ? `<span class="note">速度</span>${[0.25, 0.5, 1].map(r => `<button class="btn small" data-rate="${r}" aria-pressed="${r === 1}">${r}倍</button>`).join("")}` : ""}
       <span class="note" style="margin-left:auto">${v.kind === "move" ? `${cmdHTML(v.cmd)} ${esc(v.cond)}` : `${normalCmd(v)}　` + `発生 ${esc(v.startup)}F ${v.gadv ? "／ガード時 " + esc(v.gadv) : ""}`} ${v.kind === "normal" ? attrTag(v.attr) : ""}</span></div>
     ${easyBlock(v)}
@@ -368,6 +369,7 @@ function openDetail(id) {
       <button class="btn primary" id="dSave">保存</button></div>` : ""}
     ${v.kind === "move" ? `<div class="note">映像：CAPCOM公式サイトのコマンドリストより</div>` : ""}`,
     () => { player?.destroy(); });
+  $$("[data-dvs]").forEach(b => b.onclick = () => { const el = $("#dv"), k = b.dataset.dvs; if (k === "all") { el._segStop?.(); el.loop = true; el.currentTime = 0; } else segPlay(el, v.vs[k]); el.play().catch(() => {}); $$("[data-dvs]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
   const setRate = r => { if (v.kind === "move") $("#dv").playbackRate = r; else player?.rate(r); $$("[data-rate]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.rate === r)); };
   $$("[data-rate]").forEach(b => b.onclick = () => setRate(+b.dataset.rate));
   $$("[data-ev]").forEach(b => b.onclick = () => { $("#easyBody").innerHTML = easyFrames(v.frames[+b.dataset.ev], v.kind); $$("[data-ev]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
@@ -808,3 +810,34 @@ async function boot() {
 }
 window.addEventListener("beforeunload", saveLastT);
 boot();
+
+/* ---------- 公式映像の区間（通常版／OD版、弱中強） ----------
+   公式の必殺技映像は「通常版 → 黒いコマ → OD版」のようにつながっているので、
+   黒いコマの位置（data.js の vs）を使って、選んだ強さの部分だけを流す。 */
+const VS_LABEL = { "": "通常", "弱": "弱", "中": "中", "強": "強", "OD": "OD" };
+function vSeg(v, str) {
+  const s = v?.vs; if (!s) return null;
+  if (str && s[str]) return s[str];
+  if (str === "OD") return null;
+  return s[""] || s["弱"] || null;
+}
+/* el の再生を区間 [a,b] に限定する。loop=false なら区間の終わりで止めて onEnd を呼ぶ */
+function segPlay(el, seg, loop = true, onEnd) {
+  if (el._segStop) el._segStop(); if (!seg) return;
+  const [a, b] = seg; let on = true; el.loop = false;
+  const start = () => { try { el.currentTime = a; } catch (e) {} };
+  if (el.readyState >= 1) start(); else el.addEventListener("loadedmetadata", start, { once: true });
+  const tick = () => {
+    if (!on || !el.isConnected) return;
+    const t = el.currentTime;
+    if (el.readyState >= 1 && (t < a - 0.15 || t >= b - 0.03 || el.ended)) {
+      if (t >= b - 0.03 || el.ended) { if (loop) { el.currentTime = a; el.play().catch(() => {}); } else { on = false; el.pause(); onEnd && onEnd(); return; } }
+      else el.currentTime = a;
+    }
+    el.requestVideoFrameCallback ? el.requestVideoFrameCallback(tick) : requestAnimationFrame(tick);
+  };
+  el.requestVideoFrameCallback ? el.requestVideoFrameCallback(tick) : requestAnimationFrame(tick);
+  // 一時停止中は requestVideoFrameCallback が来ないので、保険で見張る
+  const iv = setInterval(() => { if (!on || !el.isConnected) return clearInterval(iv); if (el.currentTime >= b + 0.05 || el.currentTime < a - 0.3) { if (!el.paused || !loop) tick(); else el.currentTime = a; } }, 300);
+  el._segStop = () => { on = false; clearInterval(iv); el._segStop = null; };
+}
