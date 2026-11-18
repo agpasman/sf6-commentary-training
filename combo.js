@@ -320,7 +320,7 @@ function pickerHTML() {
   const item = v => { const r = a ? rel(a, v, pm.node.str) : null; return `<button class="pkcard ${r ? r.sit : ""}" data-addref="${v.id}" title="${esc(r ? SIT[r.sit] + "：" + r.text : "")}">
       ${v.video ? `<video src="${v.video}#t=0.6" muted playsinline preload="metadata"></video>` : `<span class="btnlabel" style="font-size:20px">${esc(v.kind === "normal" ? v.label : v.label || v.name)}</span>`}
       <span class="pknm">${esc(v.kind === "normal" ? v.label : v.name)}${v.kind === "normal" ? ` <small>${esc(v.name)}</small>` : ""}</span>
-      <span class="pkcmd">${v.kind === "normal" ? (PREF.ctrl === "modern" ? (v.mcmd ? cmdHTML(v.mcmd) : "") : cmdHTML(normalText(v))) : cmdHTML(v.cmd || "")}</span></button>`; };
+      <span class="pkcmd ${v.kind === "normal" ? "big" : ""}">${v.kind === "normal" ? nodeCmdHTML(v, true) : v.kind === "sys" ? cmdHTML(PREF.ctrl === "modern" && v.mcmd ? v.mcmd : v.cmd || "") : cmdHTML(v.cmd || "")}</span></button>`; };
   return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">技を追加${a ? `<span class="note">（「${esc(nodeView(pm.node)?.sname)}」の後ろ）</span>` : ""}</h2><button class="btn" data-close>閉じる</button></div>
     <input type="search" id="pkq" value="${esc(C.q)}" placeholder="技名・よみ・コマンドで検索" aria-label="技を検索">
     <div class="chips">${tabs.map(t => `<button class="chip" data-pktab="${t}" aria-pressed="${t === C.tab && !q}">${t}${t === "おすすめ" && a ? "（つながる技）" : ""}</button>`).join("")}</div>

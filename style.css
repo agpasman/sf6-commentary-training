@@ -344,3 +344,4 @@ details.panel summary{cursor:pointer}
 .condpill.bad{border-color:var(--hot);color:#ff8fa8}
 code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
 .ic.mod.mauto{width:auto;border-radius:99px;padding:0 .5em;font-size:.6em}
+.pkcmd.big{padding:2px 8px 0}.pkcmd.big .cmdicons.big{font-size:24px;gap:3px}
