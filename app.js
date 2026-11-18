@@ -827,17 +827,15 @@ function segPlay(el, seg, loop = true, onEnd) {
   const [a, b] = seg; let on = true; el.loop = false;
   const start = () => { try { el.currentTime = a; } catch (e) {} };
   if (el.readyState >= 1) start(); else el.addEventListener("loadedmetadata", start, { once: true });
-  const tick = () => {
-    if (!on || !el.isConnected) return;
+  const check = () => {
+    if (!on || !el.isConnected || el.readyState < 1) return;
     const t = el.currentTime;
-    if (el.readyState >= 1 && (t < a - 0.15 || t >= b - 0.03 || el.ended)) {
-      if (t >= b - 0.03 || el.ended) { if (loop) { el.currentTime = a; el.play().catch(() => {}); } else { on = false; el.pause(); onEnd && onEnd(); return; } }
-      else el.currentTime = a;
-    }
-    el.requestVideoFrameCallback ? el.requestVideoFrameCallback(tick) : requestAnimationFrame(tick);
+    if (t >= b - 0.03 || el.ended) { if (loop) { el.currentTime = a; el.play().catch(() => {}); } else { on = false; el.pause(); onEnd && onEnd(); } }
+    else if (t < a - 0.15) el.currentTime = a;
   };
+  const tick = () => { if (!on || !el.isConnected) return; check(); if (on) el.requestVideoFrameCallback ? el.requestVideoFrameCallback(tick) : requestAnimationFrame(tick); };
   el.requestVideoFrameCallback ? el.requestVideoFrameCallback(tick) : requestAnimationFrame(tick);
-  // 一時停止中は requestVideoFrameCallback が来ないので、保険で見張る
-  const iv = setInterval(() => { if (!on || !el.isConnected) return clearInterval(iv); if (el.currentTime >= b + 0.05 || el.currentTime < a - 0.3) { if (!el.paused || !loop) tick(); else el.currentTime = a; } }, 300);
+  // 最後まで再生し終わったときなどは requestVideoFrameCallback が来ないので、保険で見張る
+  const iv = setInterval(() => { if (!on || !el.isConnected) return clearInterval(iv); if (el.ended || (!el.paused && el.currentTime >= b - 0.03) || el.currentTime < a - 0.3) check(); }, 150);
   el._segStop = () => { on = false; clearInterval(iv); el._segStop = null; };
 }
