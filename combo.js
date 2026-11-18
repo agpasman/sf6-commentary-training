@@ -617,6 +617,8 @@ function parseToken0(tok, cid) {
   for (const [k, key] of Object.entries(ALIAS)) if (norm(t) === norm(k)) { const v = nm.find(x => x.key === key); if (v) return { type: "move", ref: v.id, str: "" }; }
   const all = [...mv, ...nm];
   let v = all.find(x => norm(x.name) === body) || all.find(x => norm(x.kana) === body) || all.find(x => norm(x.label) === norm(t));
+  // 「弱フリッカー」のように強さが付いていたら、同名の通常技より強さを選べる必殺技を優先
+  if (v && v.kind === "normal" && pre && body.length >= 2) { const sp = mv.filter(x => strable(x) && norm(x.name).includes(body)).sort((a, b) => a.name.length - b.name.length)[0]; if (sp) v = sp; }
   if (!v && body.length >= 2) v = mv.filter(x => norm(x.name).startsWith(body) || norm(x.name).includes(body)).sort((a, b) => a.name.length - b.name.length)[0];
   if (v) return { type: "move", ref: v.id, str: v.kind === "move" && strable(v) ? pre : "" };
   return { type: "cond", text: "？" + tok, unknown: true };
