@@ -353,6 +353,40 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding
 .ohint.win{border-left-color:#3ddc97}.ohint.win b{color:#3ddc97}
 .ohint.lose{border-left-color:#ff5a7e}.ohint.lose b{color:#ff8fa8}
 .ohint.even{border-left-color:#ffd21f}.ohint.even b{color:#ffd21f}
-.ccnode.memo{width:220px;background:#2a2814;border-color:#8a7d2a;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.ccnode.memo{width:220px;background:#2a2814;border-color:#8a7d2a;box-shadow:0 4px 12px rgba(0,0,0,.4);display:flex;flex-direction:column}
 .ccnode.memo .cchead{color:#e8d67a;border-bottom-color:#5a5320}
-.memotext{width:calc(100% - 12px);margin:6px;background:transparent;border:0;color:#fff6c2;font-size:13px;resize:vertical}
+.memotext{width:calc(100% - 12px);margin:6px;background:transparent;border:0;color:#fff6c2;font-size:13px;resize:none;flex:1;min-height:2.6em;line-height:1.35;user-select:text;outline:none}
+
+/* コメント：書式バー・文字だけ */
+.memo .mbar{display:none;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 6px;border-bottom:1px solid #5a5320}
+.memo.picked .mbar,.memo:focus-within .mbar{display:flex}
+.memo .mbar select{font-size:12px;padding:2px 4px}
+.mini{font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.mcols{display:flex;gap:3px}
+.mcol{width:16px;height:16px;border-radius:50%;border:2px solid #0006;padding:0;cursor:pointer}
+.mcol.on{outline:2px solid var(--accent);outline-offset:1px}
+.ccnode.memo.plain{background:transparent;border-color:transparent;box-shadow:none}
+.ccnode.memo.plain:hover,.ccnode.memo.plain.picked,.ccnode.memo.plain:focus-within{border:2px dashed #8a7d2a;background:rgba(0,0,0,.25)}
+.ccnode.memo.plain .cchead{visibility:hidden}
+.ccnode.memo.plain:hover .cchead,.ccnode.memo.plain.picked .cchead,.ccnode.memo.plain:focus-within .cchead{visibility:visible}
+.ccnode.memo.plain .memotext{text-shadow:0 2px 0 #000,0 0 6px #000,0 0 2px #000;font-weight:700}
+/* 大きさ変更のつまみ */
+.rs{position:absolute;right:-2px;bottom:-2px;width:16px;height:16px;cursor:nwse-resize;opacity:0;background:linear-gradient(135deg,transparent 50%,var(--accent) 50%);border-bottom-right-radius:10px}
+.ccnode:hover .rs,.ccnode.picked .rs{opacity:.9}
+/* 映像なし：技名＋コマンドを大きく */
+.ccnode.compact .ccbody{cursor:grab;padding-top:8px}
+.ccnode.compact .ccnm{font-size:24px}
+.ccnode.compact .ccnm small{font-size:13px}
+.ccnode.compact .kana{font-size:12px}
+.ccnode.compact .cccmd{font-size:24px;min-height:40px}
+.ccnode.compact .cccmd .cmdicons.big{font-size:30px}
+.ccnode.compact .handle{top:40px}
+/* 書き出し中 */
+.exporting .handle,.exporting .rs,.exporting .ccnode .x,.exporting .mbar,.exnolabel .elabel{display:none!important}
+.exporting .ccnode.picked{border-color:var(--line);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.exporting .ccnode.memo.plain{border-color:transparent!important;background:transparent!important}
+.exporting .ccnode.memo.plain .cchead{visibility:hidden!important}
+.exporting .memotext::placeholder{color:transparent}
+.exporting .ccnode.memo:not(.plain).picked{border-color:#8a7d2a}
+.expreview{max-height:65vh;overflow:auto;background:#05060c;border-radius:8px;text-align:center}
+.expreview img,.expreview video{max-width:100%;display:block;margin:auto}

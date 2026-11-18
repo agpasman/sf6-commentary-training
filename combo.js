@@ -198,7 +198,7 @@ function emptyHTML() {
 function chartHTML() {
   const ch = C.chart; const rs = routes(ch);
   const ids = Object.keys(ch.nodes);
-  const W = Math.max(900, ...ids.map(id => ch.nodes[id].x + NODE_W + 120)); const H = Math.max(420, ...ids.map(id => ch.nodes[id].y + 320));
+  const W = Math.max(900, ...ids.map(id => { const n = ch.nodes[id]; return n.x + (n.w || NODE_W) * (n.s || 1) + 120; })); const H = Math.max(420, ...ids.map(id => { const n = ch.nodes[id]; return n.y + (n.h || 320) * (n.s || 1) + 60; }));
   const pk = C.picked && ch.nodes[C.picked];
   return `<div class="row" style="justify-content:space-between;align-items:flex-end">
       <input type="text" id="ccName" class="ccname" value="${esc(ch.name)}" placeholder="チャート名（例：屈中P始動 中央コンボ）" aria-label="チャート名">
@@ -211,6 +211,8 @@ function chartHTML() {
       <button class="btn" id="ccAddMemo">＋ コメント</button>
       ${PREF.ctrl === "modern" && (CMAP[C.char]?.modernExtra || []).length ? `<button class="btn" id="ccAddAssist">＋ アシストコンボ</button>` : ""}
       <button class="btn" id="ccImport">テキストから作る</button>
+      <button class="btn" id="ccNoVid" aria-pressed="${!!PREF.ccNoVid}">${PREF.ccNoVid ? "☑" : "☐"} 映像なし</button>
+      <button class="btn" id="ccExport">書き出し（PNG・GIF・動画）</button>
       ${pk ? `<span class="note">選択中：<b>${esc(pk.type === "move" ? nodeView(pk)?.sname : pk.text)}</b>（追加すると、このカードの後ろにつながります）</span><button class="btn small" id="ccUnpick">選択を外す</button>` : `<span class="note">カードを選ぶと、その後ろに追加されます。右端の● をドラッグして別のカードに離すと線を引けます。</span>`}
     </div>
     <div class="cccanvas" id="ccCanvas"><div class="ccinner" style="width:${W}px;height:${H}px">
@@ -240,15 +242,39 @@ function assistHTML(a, n) {
   const first = a[1].split("→")[0].trim(); const btn = (a[1].match(/(弱|中|強)/) || [])[1] || "";
   return `${cmdHTML(first, { big: true })}${n > 1 ? `<span class="ic txt">続けて</span>${cmdHTML(btn, { big: true })}<span class="ic txt" style="font-size:18px;color:var(--ink)">×${n - 1}</span>` : ""}`;
 }
+const MEMO_FONTS = { gothic: ["ゴシック", "'Zen Kaku Gothic New',sans-serif"], maru: ["丸ゴシック", "'M PLUS Rounded 1c',sans-serif"], mincho: ["明朝", "'Shippori Mincho',serif"], heavy: ["極太", "'Dela Gothic One',sans-serif"], hand: ["手書き風", "'Yomogi',cursive"], pop: ["ポップ", "'Reggae One',sans-serif"], dot: ["ドット", "'DotGothic16',sans-serif"] };
+const MEMO_SIZES = { S: 13, M: 18, L: 26, XL: 38 };
+const MEMO_COLORS = ["#fff6c2", "#ffffff", "#ffd21f", "#ff5a6e", "#5fd0ff", "#7dff9a"];
+/* カードの位置・大きさ（コメント／状況マスは幅と高さ、それ以外は拡大率） */
+function nst(n) {
+  let s = `left:${n.x}px;top:${n.y}px;`;
+  if (n.type === "memo" || n.type === "cond") { if (n.w) s += `width:${n.w}px;`; if (n.h && n.type === "memo") s += `height:${n.h}px;`; }
+  else if (n.s && n.s !== 1) s += `transform:scale(${n.s});transform-origin:0 0;`;
+  return s;
+}
 function nodeHTML(id) {
-  const ch = C.chart, n = ch.nodes[id]; const sel = id === C.picked ? "picked" : "";
-  if (n.type === "memo") return `<div class="ccnode memo ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+  const h = nodeHTML0(id); if (!h) return h;
+  return h.replace(/<\/div>\s*$/, `<span class="rs" data-resize="${id}" title="ドラッグで大きさを変える"></span></div>`);
+}
+function memoHTML(id, n, sel) {
+  const f = MEMO_FONTS[n.font] || MEMO_FONTS.gothic; const sz = MEMO_SIZES[n.size] || 13; const col = n.color || (n.style === "text" ? "#ffffff" : MEMO_COLORS[0]);
+  return `<div class="ccnode memo ${n.style === "text" ? "plain" : ""} ${sel}" data-node="${id}" style="${nst(n)}">
       <div class="cchead" data-grip="${id}"><span>コメント</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
-      <textarea class="memotext" data-memo="${id}" rows="4" placeholder="ここにメモ（ルートの計算には入りません）">${esc(n.text || "")}</textarea></div>`;
+      <div class="mbar">
+        <button class="mini" data-mstyle="${id}" title="枠つき／文字だけ を切り替え">${n.style === "text" ? "文字だけ" : "枠つき"}</button>
+        <select data-mfont="${id}" aria-label="フォント">${Object.entries(MEMO_FONTS).map(([k, v]) => `<option value="${k}" ${k === (n.font || "gothic") ? "selected" : ""}>${v[0]}</option>`).join("")}</select>
+        <select data-msize="${id}" aria-label="文字の大きさ">${Object.keys(MEMO_SIZES).map(k => `<option ${k === (n.size || "S") ? "selected" : ""}>${k}</option>`).join("")}</select>
+        <span class="mcols">${MEMO_COLORS.map(c => `<button class="mcol ${c === col ? "on" : ""}" data-mcolor="${id}" data-c="${c}" style="background:${c}" aria-label="文字色"></button>`).join("")}</span>
+      </div>
+      <textarea class="memotext" data-memo="${id}" rows="3" placeholder="ここにコメント（ルートの計算には入りません）" style="font-family:${f[1].replace(/"/g, "'")};font-size:${sz}px;color:${col}">${esc(n.text || "")}</textarea></div>`;
+}
+function nodeHTML0(id) {
+  const ch = C.chart, n = ch.nodes[id]; const sel = id === C.picked ? "picked" : "";
+  if (n.type === "memo") return memoHTML(id, n, sel);
   if (n.type === "opp") {
     const pm = prevMove(ch, id); const pv = pm.node && view(pm.node.ref); const r = pv && rowFor(pv, pm.node.str);
     const adv = r ? fNum(n.res === "hit" ? r[4] : r[5]) : null; const h = oppHint(n.action, /D/.test(String(n.res === "hit" ? r?.[4] : "")) ? null : adv, n.res);
-    return `<div class="ccnode opp ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+    return `<div class="ccnode opp ${sel}" data-node="${id}" style="${nst(n)}">
       <div class="cchead" data-grip="${id}"><span>相手の行動</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
       <div class="ccbody">
         ${pv ? `<div class="note">「${esc(nodeView(pm.node)?.sname)}」を <select data-ores="${id}"><option value="guard" ${n.res !== "hit" ? "selected" : ""}>ガードされた</option><option value="hit" ${n.res === "hit" ? "selected" : ""}>当てた</option></select> あと（${adv != null ? (adv > 0 ? "+" : "") + adv : "—"}）</div>` : `<div class="note">前に自分の技カードをつなぐと、有利不利から判定します</div>`}
@@ -259,7 +285,7 @@ function nodeHTML(id) {
   }
   if (n.type === "assist") {
     const a = assistOf(n); const max = assistSteps(a); const k = Math.min(n.n || 1, max || 1);
-    return `<div class="ccnode assist ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+    return `<div class="ccnode assist ${sel}" data-node="${id}" style="${nst(n)}">
       <div class="cchead" data-grip="${id}"><span>モダン：アシストコンボ</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
       <div class="ccbody">
         <div class="ccnm">${esc(a ? a[0] : "アシストコンボ")}</div>
@@ -271,7 +297,7 @@ function nodeHTML(id) {
       </div>
       <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span></div>`;
   }
-  if (n.type === "cond") return `<div class="ccnode cond ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+  if (n.type === "cond") return `<div class="ccnode cond ${sel}" data-node="${id}" style="${nst(n)}">
       <div class="cchead" data-grip="${id}"><span>状況・前提</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
       <input type="text" class="condtext" data-cond="${id}" value="${esc(n.text || "")}" placeholder="例：パニカン時" list="condList">
       <span class="handle" data-handle="${id}" title="ドラッグして次のカードにつなぐ"></span></div>`;
@@ -281,10 +307,11 @@ function nodeHTML(id) {
   const media = v.video ? `<video data-src="${v.video}" muted loop playsinline preload="none"></video>`
     : v.kind === "normal" ? `<div class="nmedia"><span class="btnlabel">${esc(v.label)}</span><span class="nbig">${nodeCmdHTML(v, true)}</span></div>`
     : `<span class="btnlabel">${esc(v.label || v.name)}</span>`;
-  return `<div class="ccnode ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+  const nv = PREF.ccNoVid;
+  return `<div class="ccnode ${nv ? "compact" : ""} ${sel}" data-node="${id}" style="${nst(n)}">
     <div class="cchead" data-grip="${id}"><span>${esc(v.kind === "normal" ? "通常技" : v.kind === "sys" ? "システム" : v.cat)}</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
-    <div class="ccmedia" data-grip="${id}">${media}</div>
-    <div class="ccbody">
+    ${nv ? "" : `<div class="ccmedia" data-grip="${id}">${media}</div>`}
+    <div class="ccbody" ${nv ? `data-grip="${id}"` : ""}>
       ${v.kana && v.kind !== "normal" ? `<span class="kana">${esc(v.kana)}</span>` : ""}
       <div class="ccnm">${esc(v.sname)}${v.kind === "normal" ? `<small>${esc(v.name)}</small>` : ""}</div>
       <div class="cccmd">${nodeCmdHTML(v, true)}</div>
@@ -297,12 +324,12 @@ function nodeHTML(id) {
 }
 function drawEdges(temp) {
   const svg = $("#ccSvg"); if (!svg || !C.chart) return;
-  const ch = C.chart; const box = $(".ccinner").getBoundingClientRect();
-  const rect = id => { const el = $(`[data-node="${id}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { l: r.left - box.left, r: r.right - box.left, t: r.top - box.top, h: r.height }; };
+  const ch = C.chart; const inner = $(".ccinner"); const box = inner.getBoundingClientRect(); const k = box.width / inner.offsetWidth || 1;
+  const rect = id => { const el = $(`[data-node="${id}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { l: (r.left - box.left) / k, r: (r.right - box.left) / k, t: (r.top - box.top) / k, h: r.height / k, s: ch.nodes[id]?.s || 1 }; };
   let out = "", labels = "";
   ch.edges.forEach((e, i) => {
     const a = rect(e.from), b = rect(e.to); if (!a || !b) return;
-    const x1 = a.r, y1 = a.t + Math.min(a.h / 2, 90), x2 = b.l, y2 = b.t + Math.min(b.h / 2, 90); const dx = Math.max(30, (x2 - x1) / 2);
+    const x1 = a.r, y1 = a.t + Math.min(a.h / 2, 90 * a.s), x2 = b.l, y2 = b.t + Math.min(b.h / 2, 90 * b.s); const dx = Math.max(30, (x2 - x1) / 2);
     out += `<path class="ccedge" d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}" marker-end="url(#ccah)"/>`;
     labels += `<button class="elabel" data-edge="${i}" style="left:${(x1 + x2) / 2}px;top:${(y1 + y2) / 2}px" title="押すとつなぎ方を変更／削除">${esc(LINKS[e.link || ""])}</button>`;
   });
@@ -390,6 +417,10 @@ document.addEventListener("click", e => {
   const ad = t.closest("[data-adot]"); if (ad) { C.chart.nodes[ad.dataset.adot].n = +ad.dataset.k; touch(); rerenderChart(); return; }
   if (t.closest("#ccImport")) { openImport(); return; }
   if (t.closest("#impGo")) { runImport(); return; }
+  if (t.closest("#ccNoVid")) { PREF.ccNoVid = !PREF.ccNoVid; savePref(); rerenderChart(); return; }
+  if (t.closest("#ccExport")) { openExport(); return; }
+  const ms = t.closest("[data-mstyle]"); if (ms) { const n = C.chart.nodes[ms.dataset.mstyle]; n.style = n.style === "text" ? "box" : "text"; if (n.color === "#ffffff" || n.color === MEMO_COLORS[0]) delete n.color; touch(); rerenderChart(); return; }
+  const mc = t.closest("[data-mcolor]"); if (mc) { C.chart.nodes[mc.dataset.mcolor].color = mc.dataset.c; touch(); rerenderChart(); return; }
   if (t.closest("#ccUnpick")) { C.picked = null; rerenderChart(); return; }
   const dl = t.closest("[data-del]"); if (dl) { const id = dl.dataset.del; delete C.chart.nodes[id]; C.chart.edges = C.chart.edges.filter(x => x.from !== id && x.to !== id); if (C.picked === id) C.picked = null; touch(); rerenderChart(); return; }
   const eg = t.closest("[data-edge]"); if (eg) { edgeMenu(+eg.dataset.edge); return; }
@@ -401,7 +432,7 @@ document.addEventListener("click", e => {
   }
   // カードを選ぶ（ドラッグでなければ）
   const nd = t.closest("[data-node]");
-  if (nd && !t.closest("select,input,button,video") && !C.moved) { C.picked = C.picked === nd.dataset.node ? null : nd.dataset.node; rerenderChart(); return; }
+  if (nd && !t.closest("select,input,textarea,button,video,.mbar") && !C.moved) { C.picked = C.picked === nd.dataset.node ? null : nd.dataset.node; rerenderChart(); return; }
   if (nd && t.closest("video") && !C.moved) { const v = view(C.chart.nodes[nd.dataset.node]?.ref); if (v && v.kind !== "sys") openDetail(v.id); }
 });
 function edgeMenu(i) {
@@ -426,6 +457,8 @@ document.addEventListener("change", e => {
   if (t.dataset.str) { C.chart.nodes[t.dataset.str].str = t.value; touch(); rerenderChart(); }
   if (t.dataset.oact) { C.chart.nodes[t.dataset.oact].action = t.value; touch(); rerenderChart(); }
   if (t.dataset.ores) { C.chart.nodes[t.dataset.ores].res = t.value; touch(); rerenderChart(); }
+  if (t.dataset.mfont) { C.chart.nodes[t.dataset.mfont].font = t.value; touch(); rerenderChart(); }
+  if (t.dataset.msize) { C.chart.nodes[t.dataset.msize].size = t.value; touch(); rerenderChart(); }
   if (t.dataset.aidx) { const n = C.chart.nodes[t.dataset.aidx]; n.idx = +t.value; n.n = 1; touch(); rerenderChart(); }
 });
 /* ドラッグで移動・線を引く */
@@ -433,12 +466,20 @@ document.addEventListener("pointerdown", e => {
   if (!inCombo() || !C.chart) return;
   const h = e.target.closest("[data-handle]");
   if (h) { e.preventDefault(); C.link = { from: h.dataset.handle }; return; }
-  const g = e.target.closest("[data-grip]"); if (!g || e.target.closest("button,select,input")) return;
+  const rz = e.target.closest("[data-resize]");
+  if (rz) { e.preventDefault(); const id = rz.dataset.resize, n = C.chart.nodes[id], el = $(`[data-node="${id}"]`); C.rsz = { id, sx: e.clientX, sy: e.clientY, w0: el.offsetWidth, h0: el.offsetHeight, s0: n.s || 1, free: n.type === "memo" || n.type === "cond" }; C.moved = true; return; }
+  const g = e.target.closest("[data-grip]"); if (!g || e.target.closest("button,select,input,textarea")) return;
   const n = C.chart.nodes[g.dataset.grip]; if (!n) return;
   C.drag = { id: g.dataset.grip, sx: e.clientX, sy: e.clientY, x: n.x, y: n.y }; C.moved = false;
 });
 document.addEventListener("pointermove", e => {
   if (!inCombo() || !C.chart) return;
+  if (C.rsz) {
+    const r = C.rsz, n = C.chart.nodes[r.id], el = $(`[data-node="${r.id}"]`), dx = e.clientX - r.sx, dy = e.clientY - r.sy;
+    if (r.free) { n.w = Math.round(Math.min(900, Math.max(120, r.w0 + dx))); el.style.width = n.w + "px"; if (n.type === "memo") { n.h = Math.round(Math.min(900, Math.max(50, r.h0 + dy))); el.style.height = n.h + "px"; } }
+    else { const w = r.w0 * r.s0 + Math.max(dx, dy * r.w0 / r.h0); n.s = Math.round(Math.min(2.2, Math.max(0.6, w / r.w0)) * 100) / 100; el.style.transform = `scale(${n.s})`; el.style.transformOrigin = "0 0"; }
+    drawEdges(); return;
+  }
   if (C.drag) {
     const d = C.drag, dx = e.clientX - d.sx, dy = e.clientY - d.sy; if (Math.abs(dx) + Math.abs(dy) > 4) C.moved = true; if (!C.moved) return;
     const n = C.chart.nodes[d.id]; n.x = Math.max(0, Math.round((d.x + dx) / 10) * 10); n.y = Math.max(0, Math.round((d.y + dy) / 10) * 10);
@@ -450,6 +491,7 @@ document.addEventListener("pointermove", e => {
 });
 document.addEventListener("pointerup", e => {
   if (!inCombo() || !C.chart) return;
+  if (C.rsz) { C.rsz = null; touch(); rerenderChart(); setTimeout(() => (C.moved = false), 0); return; }
   if (C.drag) { if (C.moved) { touch(); rerenderChart(); setTimeout(() => (C.moved = false), 0); } C.drag = null; return; }
   if (C.link) {
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-node]"); const from = C.link.from; C.link = null;
@@ -592,4 +634,99 @@ function runImport() {
   closeModal(); C.picked = null; renderCombo();
   const unk = rows.flat().filter(x => x.unknown).length;
   toast(unk ? `チャートを作りました。読み取れなかった表記が${unk}か所あります（「？」の状況マス）` : "チャートを作りました", 4000);
+}
+
+/* ---------- 書き出し（PNG・GIF・動画） ----------
+   公式映像は他サイトからの画像化が許可されていないため、Chromeの「このタブを共有」で
+   チャート部分を撮影して書き出す。 */
+const EX = { fmt: "png", pos: 50, dur: 4, width: 960, labels: true };
+function openExport() {
+  const ok = !!navigator.mediaDevices?.getDisplayMedia;
+  openModal(`<h2>コンボチャートを書き出す</h2>
+    ${ok ? "" : `<div class="banner">このブラウザでは書き出しが使えません。パソコンのChromeかEdgeで開いてください。</div>`}
+    <div class="chips">${[["png", "PNG（画像1枚）"], ["gif", "GIF（動くアニメ）"], ["video", "動画（MP4／WebM）"]].map(([k, t]) => `<button class="chip" data-exfmt="${k}" aria-pressed="${EX.fmt === k}">${t}</button>`).join("")}</div>
+    <div id="exOpts">${exOptsHTML()}</div>
+    <label class="note"><input type="checkbox" id="exLabels" ${EX.labels ? "checked" : ""}> 線の上の「つなぎ方」ラベルも写す</label>
+    <p class="note">「書き出す」を押すと、Chromeが「このタブを共有しますか？」と聞いてきます。<b>「共有」</b>を選んでください。チャート全体が画面いっぱいに並び替わって撮影され、終わると元に戻ります（撮影中はマウスを動かさないでください）。</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-close>やめる</button><button class="btn primary" id="exGo" ${ok ? "" : "disabled"}>書き出す</button></div>`);
+  $$("[data-exfmt]").forEach(b => b.onclick = () => { EX.fmt = b.dataset.exfmt; $$("[data-exfmt]").forEach(x => x.setAttribute("aria-pressed", x === b)); $("#exOpts").innerHTML = exOptsHTML(); bindExOpts(); });
+  bindExOpts();
+  $("#exLabels").onchange = e => (EX.labels = e.target.checked);
+  $("#exGo").onclick = () => runExport();
+}
+function exOptsHTML() {
+  if (PREF.ccNoVid) return EX.fmt === "png" ? "" : `<label class="note">長さ <input type="range" id="exDur" min="2" max="8" value="${EX.dur}"> <b id="exDurV">${EX.dur}秒</b></label>`;
+  if (EX.fmt === "png") return `<label class="note">映像を止める位置 <input type="range" id="exPos" min="0" max="100" value="${EX.pos}"> <b id="exPosV">${EX.pos}%</b>（技が当たっている瞬間あたり＝40〜60%がおすすめ）</label>`;
+  return `<label class="note">長さ <input type="range" id="exDur" min="2" max="8" value="${EX.dur}"> <b id="exDurV">${EX.dur}秒</b></label>
+    ${EX.fmt === "gif" ? `<label class="note">GIFの横幅 <select id="exW">${[640, 960, 1280].map(w => `<option ${w === EX.width ? "selected" : ""}>${w}</option>`).join("")}</select>px（大きいほどファイルが重くなります）</label>` : ""}`;
+}
+function bindExOpts() {
+  const p = $("#exPos"); if (p) p.oninput = () => { EX.pos = +p.value; $("#exPosV").textContent = EX.pos + "%"; };
+  const d = $("#exDur"); if (d) d.oninput = () => { EX.dur = +d.value; $("#exDurV").textContent = EX.dur + "秒"; };
+  const w = $("#exW"); if (w) w.onchange = () => (EX.width = +w.value);
+}
+const waitEv = (el, ev, ms = 4000) => new Promise(r => { const t = setTimeout(r, ms); el.addEventListener(ev, () => { clearTimeout(t); r(); }, { once: true }); });
+/* チャートを画面いっぱいに並べる。戻り値＝撮影する範囲 */
+function exStage() {
+  const inner = $(".ccinner"), cv = $("#ccCanvas"); const pad = 24;
+  let x0 = 1e9, y0 = 1e9, x1 = 0, y1 = 0;
+  $$("#ccCanvas [data-node]").forEach(el => { const n = C.chart.nodes[el.dataset.node] || {}; const s = n.s || 1; x0 = Math.min(x0, el.offsetLeft); y0 = Math.min(y0, el.offsetTop); x1 = Math.max(x1, el.offsetLeft + el.offsetWidth * s + 10); y1 = Math.max(y1, el.offsetTop + el.offsetHeight * s); });
+  const bw = x1 - x0, bh = y1 - y0; const k = Math.min(2, (innerWidth - pad * 2) / bw, (innerHeight - pad * 2) / bh);
+  document.body.classList.add("exporting"); if (!EX.labels) document.body.classList.add("exnolabel");
+  cv.style.cssText = `position:fixed;left:0;top:0;width:${Math.ceil(bw * k + pad * 2)}px;height:${Math.ceil(bh * k + pad * 2)}px;max-height:none;overflow:hidden;z-index:9999;border-radius:0`;
+  inner.style.transformOrigin = "0 0"; inner.style.transform = `translate(${pad}px,${pad}px) scale(${k}) translate(${-x0}px,${-y0}px)`;
+  document.activeElement?.blur?.();
+  return cv;
+}
+function exUnstage() { document.body.classList.remove("exporting", "exnolabel"); rerenderChart(); }
+async function runExport() {
+  closeModal(); const cv = exStage(); const vids = $$("#ccCanvas video[data-src]");
+  vids.forEach(v => { if (!v.src) v.src = v.dataset.src; v.preload = "auto"; });
+  let stream;
+  try { stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser", frameRate: 30 }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include", surfaceSwitching: "exclude" }); }
+  catch (e) { exUnstage(); toast("共有がキャンセルされたので、書き出しをやめました"); return; }
+  const track = stream.getVideoTracks()[0]; let cropped = false;
+  try { if (window.CropTarget && track.cropTo) { await track.cropTo(await CropTarget.fromElement(cv)); cropped = true; } } catch (e) {}
+  const sv = document.createElement("video"); sv.muted = true; sv.srcObject = stream; await sv.play();
+  const stop = () => { stream.getTracks().forEach(t => t.stop()); exUnstage(); };
+  try {
+    await Promise.all(vids.map(v => v.readyState >= 2 ? 0 : waitEv(v, "loadeddata", 6000)));
+    if (!cropped) await sleep(300);
+    await sleep(900); // 共有の確認画面が消えるのを待つ
+    const rect = () => { if (cropped) return [0, 0, sv.videoWidth, sv.videoHeight]; const r = cv.getBoundingClientRect(), f = sv.videoWidth / innerWidth; return [r.left * f, r.top * f, r.width * f, r.height * f]; };
+    const name = (C.chart.name || "コンボチャート").replace(/[\\/:*?"<>|]/g, "_");
+    if (EX.fmt === "png") {
+      await Promise.all(vids.map(async v => { v.pause(); if (!v.duration) await waitEv(v, "loadedmetadata"); v.currentTime = (v.duration || 0) * EX.pos / 100; await waitEv(v, "seeked", 3000); }));
+      await sleep(400);
+      const [x, y, w, h] = rect(); const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(sv, x, y, w, h, 0, 0, w, h);
+      stop(); const blob = await new Promise(r => c.toBlob(r, "image/png")); exResult(blob, name + ".png", "img"); return;
+    }
+    vids.forEach(v => { v.currentTime = 0; v.loop = true; v.play().catch(() => {}); });
+    await sleep(200);
+    if (EX.fmt === "video") {
+      const [x, y, w, h] = rect(); const c = document.createElement("canvas"); c.width = Math.round(w / 2) * 2; c.height = Math.round(h / 2) * 2; const g = c.getContext("2d");
+      const mime = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+      const rec = new MediaRecorder(c.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8e6 }); const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+      let on = true; const draw = () => { if (!on) return; g.drawImage(sv, x, y, w, h, 0, 0, c.width, c.height); requestAnimationFrame(draw); }; draw();
+      rec.start(); await sleep(EX.dur * 1000); on = false; rec.stop(); await waitEv(rec, "stop"); stop();
+      exResult(new Blob(chunks, { type: mime }), name + (/mp4/.test(mime) ? ".mp4" : ".webm"), "video"); return;
+    }
+    // GIF：1秒10コマで撮ってから作る
+    const [x, y, w, h] = rect(); const W = Math.min(EX.width, Math.round(w)), H = Math.round(h * W / w);
+    const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d", { willReadFrequently: true }); const frames = [];
+    const N = EX.dur * 10, t0 = performance.now();
+    for (let i = 0; i < N; i++) { g.drawImage(sv, x, y, w, h, 0, 0, W, H); frames.push(g.getImageData(0, 0, W, H).data); const next = t0 + (i + 1) * 100; await sleep(Math.max(0, next - performance.now())); }
+    stop();
+    openModal(`<h2>GIFを作成中…</h2><p class="note" id="exProg">0 / ${N}</p>`);
+    const { GIFEncoder, quantize, applyPalette } = await import("https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm");
+    const gif = GIFEncoder();
+    for (let i = 0; i < N; i++) { const pal = quantize(frames[i], 256); gif.writeFrame(applyPalette(frames[i], pal), W, H, { palette: pal, delay: 100 }); frames[i] = null; if (i % 3 === 0) { const p = $("#exProg"); if (p) p.textContent = `${i + 1} / ${N}`; await sleep(0); } }
+    gif.finish(); exResult(new Blob([gif.bytes()], { type: "image/gif" }), name + ".gif", "img");
+  } catch (e) { console.error(e); stop(); toast("書き出しに失敗しました：" + e.message); }
+}
+function exResult(blob, fname, kind) {
+  const url = URL.createObjectURL(blob); const mb = (blob.size / 1048576).toFixed(1);
+  openModal(`<div class="wide"></div><div class="row" style="justify-content:space-between"><h2 style="margin:0">書き出しました</h2><span class="note">${esc(fname)}（${mb}MB）</span></div>
+    <div class="expreview">${kind === "img" ? `<img src="${url}" alt="書き出したチャート">` : `<video src="${url}" controls autoplay loop muted></video>`}</div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-close>閉じる</button><a class="btn primary" href="${url}" download="${esc(fname)}">保存する</a></div>`);
 }
