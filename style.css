@@ -345,3 +345,14 @@ details.panel summary{cursor:pointer}
 code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
 .ic.mod.mauto{width:auto;border-radius:99px;padding:0 .5em;font-size:.6em}
 .pkcmd.big{padding:2px 8px 0}.pkcmd.big .cmdicons.big{font-size:24px;gap:3px}
+
+.ccnode.opp{border-color:#c4507a;background:#1c1020;width:250px}
+.ccnode.opp .cchead{color:#ff8fb4}
+.oact{width:100%;font-weight:700}
+.ohint{font-size:12.5px;line-height:1.5;border-radius:8px;padding:6px 8px;background:var(--panel2);border-left:4px solid var(--line)}
+.ohint.win{border-left-color:#3ddc97}.ohint.win b{color:#3ddc97}
+.ohint.lose{border-left-color:#ff5a7e}.ohint.lose b{color:#ff8fa8}
+.ohint.even{border-left-color:#ffd21f}.ohint.even b{color:#ffd21f}
+.ccnode.memo{width:220px;background:#2a2814;border-color:#8a7d2a;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.ccnode.memo .cchead{color:#e8d67a;border-bottom-color:#5a5320}
+.memotext{width:calc(100% - 12px);margin:6px;background:transparent;border:0;color:#fff6c2;font-size:13px;resize:vertical}

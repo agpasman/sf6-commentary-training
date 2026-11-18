@@ -14,7 +14,26 @@ const SYS_ITEMS = [
   { id: "sys-dash", label: "前ステップ", name: "前ステップ", cmd: "66" },
   { id: "sys-throw", label: "投げ", name: "投げ", cmd: "弱P+弱K", mcmd: "弱+中" },
 ];
-const LINKS = { "": "→", link: "目押し", cancel: "キャンセル", chain: "連打", tc: "TC", drc: "DRC", juggle: "追撃" };
+const LINKS = { "": "→", link: "目押し", cancel: "キャンセル", chain: "連打", follow: "派生", tc: "TC", drc: "DRC", juggle: "追撃" };
+/* 相手の行動：前の自分の技（ガードされた／当たった）の有利不利から、相手がそれをするとどうなるかのヒント */
+const OPP_ACTIONS = ["最速技で暴れ（4F）", "投げ", "ジャンプ", "バックステップ", "無敵技（昇龍など）", "ドライブパリィ", "ドライブインパクト", "ガードを固める", "前ステップ・ドライブラッシュ", "様子見・歩き"];
+function oppHint(action, adv, res) {
+  const has = adv != null; const plus = has && adv > 0, minus = has && adv < 0;
+  const A = has ? (adv > 0 ? `+${adv}` : `${adv}`) : "？";
+  const H = {
+    "最速技で暴れ（4F）": !has ? ["?", "前の技の有利不利が不明です"] : adv >= 2 ? ["win", `こちら${A}有利。発生${adv + 3}F以下の技を出せば相手の4F暴れに勝つ（カウンターを取れる）。`] : adv >= 0 ? ["even", `こちら${A}。最速技どうしの勝負で相打ち〜五分。ガードかパリィが無難。`] : adv <= -4 ? ["lose", `こちら${A}不利で反撃確定。相手の発生${-adv}F以下の技が確定で入る。`] : ["lose", `こちら${A}不利。相手の4F暴れが先に当たる。こちらはガードかパリィ。`],
+    "投げ": !has ? ["?", "前の技の有利不利が不明です"] : adv >= 1 ? ["win", `こちら${A}有利。打撃を出せば相手の投げを潰せる（投げ抜けでも対応可）。`] : ["lose", `こちら${A}。相手の投げが先に決まりやすい。投げ抜け（投げ入力）で対応。`],
+    "ジャンプ": ["win", "対空（昇龍・対空通常技）で落とせる。打撃や投げを置いていると空振りして飛び込みを食らう。"],
+    "バックステップ": ["even", "投げ・短い打撃はかわされる。前ステップや長い技、ドライブラッシュで追う。バクステの着地に打撃を当てるとパニカン。"],
+    "無敵技（昇龍など）": ["win", "ガードすれば大きな確定反撃（パニカン）。こちらが打撃を重ねていると負けるので、様子見やガードで待つ。"],
+    "ドライブパリィ": ["win", "投げで崩せる（パリィ中に投げるとパニカン扱いで大ダメージ）。打撃はパリィされてゲージを回収される。"],
+    "ドライブインパクト": ["win", "こちらもドライブインパクトで返すか、発生の早い技を連続で当てて止める（2回までアーマーで受け止められる）。ガードすると画面端では壁やられ。"],
+    "ガードを固める": ["win", "投げが通る。ガードを崩すなら投げ・中段・ドライブインパクト。"],
+    "前ステップ・ドライブラッシュ": ["win", "小技や置き技で止められる。ラッシュにはこちらの最速技・パリィで対応。"],
+    "様子見・歩き": ["even", "相手は反撃や対空の準備。こちらは無理に打たず、差し合いに戻る。"],
+  }[action] || ["?", "行動を選んでください"];
+  return { type: H[0], text: H[1] };
+}
 const STRS = ["", "弱", "中", "強", "OD"];
 const COND_PRESETS = ["カウンター時", "パニカン時", "画面端", "画面中央", "DRC後", "ジャンプ攻撃から", "起き攻め", "SAゲージ必要", "Dゲージ必要", "相手がしゃがみ"];
 const NODE_W = 230, GAP_X = 70, GAP_Y = 40;
@@ -41,7 +60,7 @@ function nodeView(n) {
 const nodeCmdHTML = (sv, big) => sv.kind === "normal"
   ? (PREF.ctrl === "modern" && sv.mcmd ? cmdHTML(sv.mcmd, { big }) : cmdHTML(normalText(sv), { big }) + (PREF.ctrl === "modern" ? `<span class="note" style="font-size:10px;margin-left:4px">クラシック表記</span>` : ""))
   : cmdHTML(sv.scmd || "", { big });
-const normalText = sv => (sv.key[0] === "c" ? "2" : sv.key[0] === "s" ? "5" : "") + BTN_JA[sv.key.slice(1)];
+const normalText = sv => (sv.key[0] === "c" ? "2" : "") + BTN_JA[sv.key.slice(1)];
 
 /* ---------- 保存と変換 ---------- */
 const chartsOf = cid => Object.entries(M.recipes || {}).filter(([, r]) => r.cid === cid).sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
@@ -72,6 +91,7 @@ function prevMove(ch, id) {
     if (n.type === "move") return { node: n, id: p.from, conds, link };
     if (n.type === "cond") conds.push(n.text || "");
     if (n.type === "assist") return { node: null, assist: true, conds, link };
+    if (n.type === "opp") return { node: null, opp: n, conds, link };
     cur = p.from;
   }
   return { node: null, conds, link };
@@ -82,6 +102,7 @@ function judgeNode(ch, id) {
   const n = ch.nodes[id]; if (!n || n.type !== "move") return null;
   const pm = prevMove(ch, id);
   if (pm.assist) return { mark: "unk", text: "アシストコンボのあとは計算外（最後の段の技が分からないため）" };
+  if (pm.opp) return { mark: "start", text: "相手の行動への対応" };
   if (!pm.node) return { mark: "start", text: "始動" };
   const a = view(pm.node.ref), b = view(n.ref); const f = condFlags(pm.conds);
   if (!a || !b) return { mark: "unk", text: "判定できません" };
@@ -103,12 +124,13 @@ const MARK = { ok: ["○", "つながる"], okc: ["○", "前提ありでつな�
 
 /* ---------- ルート集計 ---------- */
 function routes(ch) {
-  const roots = Object.keys(ch.nodes).filter(id => !parentsOf(ch, id).length);
+  const roots = Object.keys(ch.nodes).filter(id => ch.nodes[id].type !== "memo" && !parentsOf(ch, id).length);
   const out = [];
   const walk = (id, path, seen) => {
     if (seen.has(id)) return; const p = [...path, id]; const kids = childrenOf(ch, id);
-    if (!kids.length) { out.push(p); return; }
-    kids.forEach(k => walk(k.to, p, new Set([...seen, id])));
+    const kidsOk = kids.filter(k => ch.nodes[k.to]?.type !== "memo");
+    if (!kidsOk.length) { out.push(p); return; }
+    kidsOk.forEach(k => walk(k.to, p, new Set([...seen, id])));
   };
   roots.forEach(r => walk(r, [], new Set()));
   return out.filter(p => p.some(id => ["move", "assist"].includes(ch.nodes[id]?.type)));
@@ -147,7 +169,7 @@ function routeSummary(ch, path) {
   const memo = steps.filter(x => x.n.type === "cond" && path.indexOf(x.id) > path.indexOf(last?.id)).map(x => x.n.text).filter(Boolean);
   const pre = steps.filter(x => x.n.type === "cond" && path.indexOf(x.id) < path.indexOf(last?.id)).map(x => x.n.text).filter(Boolean);
   const bad = moves.map(m => judgeNode(ch, m.id)).filter(j => j && (j.mark === "ng" || j.mark === "warn")).length;
-  const names = steps.filter(x => x.n.type === "move" || x.n.type === "assist").map(x => x.n.type === "assist" ? `${assistOf(x.n)?.[0] || "アシスト"}×${x.n.n || 1}段` : nodeView(x.n)?.sname).filter(Boolean);
+  const names = steps.filter(x => ["move", "assist", "opp"].includes(x.n.type)).map(x => x.n.type === "assist" ? `${assistOf(x.n)?.[0] || "アシスト"}×${x.n.n || 1}段` : x.n.type === "opp" ? `〔相手：${x.n.action}〕` : nodeView(x.n)?.sname).filter(Boolean);
   const hasAssist = steps.some(x => x.n.type === "assist");
   return { names, hasAssist, raw, scaled, drive, sa, ending, memo, pre, bad, count: moves.length };
 }
@@ -185,6 +207,8 @@ function chartHTML() {
     <div class="cctool">
       <button class="btn primary" id="ccAddMove">＋ 技を追加</button>
       <button class="btn" id="ccAddCond">＋ 状況マス</button>
+      <button class="btn" id="ccAddOpp">＋ 相手の行動</button>
+      <button class="btn" id="ccAddMemo">＋ コメント</button>
       ${PREF.ctrl === "modern" && (CMAP[C.char]?.modernExtra || []).length ? `<button class="btn" id="ccAddAssist">＋ アシストコンボ</button>` : ""}
       <button class="btn" id="ccImport">テキストから作る</button>
       ${pk ? `<span class="note">選択中：<b>${esc(pk.type === "move" ? nodeView(pk)?.sname : pk.text)}</b>（追加すると、このカードの後ろにつながります）</span><button class="btn small" id="ccUnpick">選択を外す</button>` : `<span class="note">カードを選ぶと、その後ろに追加されます。右端の● をドラッグして別のカードに離すと線を引けます。</span>`}
@@ -218,6 +242,21 @@ function assistHTML(a, n) {
 }
 function nodeHTML(id) {
   const ch = C.chart, n = ch.nodes[id]; const sel = id === C.picked ? "picked" : "";
+  if (n.type === "memo") return `<div class="ccnode memo ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+      <div class="cchead" data-grip="${id}"><span>コメント</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
+      <textarea class="memotext" data-memo="${id}" rows="4" placeholder="ここにメモ（ルートの計算には入りません）">${esc(n.text || "")}</textarea></div>`;
+  if (n.type === "opp") {
+    const pm = prevMove(ch, id); const pv = pm.node && view(pm.node.ref); const r = pv && rowFor(pv, pm.node.str);
+    const adv = r ? fNum(n.res === "hit" ? r[4] : r[5]) : null; const h = oppHint(n.action, /D/.test(String(n.res === "hit" ? r?.[4] : "")) ? null : adv, n.res);
+    return `<div class="ccnode opp ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
+      <div class="cchead" data-grip="${id}"><span>相手の行動</span><button class="x" data-del="${id}" aria-label="削除">✕</button></div>
+      <div class="ccbody">
+        ${pv ? `<div class="note">「${esc(nodeView(pm.node)?.sname)}」を <select data-ores="${id}"><option value="guard" ${n.res !== "hit" ? "selected" : ""}>ガードされた</option><option value="hit" ${n.res === "hit" ? "selected" : ""}>当てた</option></select> あと（${adv != null ? (adv > 0 ? "+" : "") + adv : "—"}）</div>` : `<div class="note">前に自分の技カードをつなぐと、有利不利から判定します</div>`}
+        <select data-oact="${id}" class="oact" aria-label="相手の行動">${OPP_ACTIONS.map(a => `<option ${a === n.action ? "selected" : ""}>${a}</option>`).join("")}</select>
+        <div class="ohint ${h.type}"><b>${{ win: "相手の負けになりやすい", lose: "相手の勝ちになりやすい", even: "読み合い", "?": "—" }[h.type]}</b><br>${esc(h.text)}</div>
+      </div>
+      <span class="handle" data-handle="${id}" title="ドラッグして、自分の対応の技につなぐ"></span></div>`;
+  }
   if (n.type === "assist") {
     const a = assistOf(n); const max = assistSteps(a); const k = Math.min(n.n || 1, max || 1);
     return `<div class="ccnode assist ${sel}" data-node="${id}" style="left:${n.x}px;top:${n.y}px">
@@ -299,7 +338,7 @@ function addNode(node) {
   Object.assign(node, placeAfter(from)); ch.nodes[id] = node;
   if (from) {
     let link = "";
-    if (node.type === "move") { const pm = prevMove({ ...ch, edges: [...ch.edges, { from, to: id }] }, id); const a = pm.node && view(pm.node.ref), b = view(node.ref); const r = a && b && rel(a, b, pm.node.str, node.str); if (r) link = r.type === "link" ? "link" : r.type === "chain" ? "chain" : "cancel"; }
+    if (node.type === "move") { const pm = prevMove({ ...ch, edges: [...ch.edges, { from, to: id }] }, id); const a = pm.node && view(pm.node.ref), b = view(node.ref); const r = a && b && rel(a, b, pm.node.str, node.str); if (r) link = r.type === "link" ? "link" : r.type === "chain" ? "chain" : r.type === "follow" ? "follow" : r.type === "tc" ? "tc" : "cancel"; }
     ch.edges.push({ from, to: id, link });
   }
   C.picked = id; touch(); rerenderChart();
@@ -345,6 +384,8 @@ document.addEventListener("click", e => {
   const ar = t.closest("[data-addref]"); if (ar) { closeModal(); addNode({ type: "move", ref: ar.dataset.addref, str: "" }); return; }
   if (t.closest("#ccAddMove")) { C.tab = C.picked ? "おすすめ" : "通常技"; C.q = ""; openPicker(); return; }
   if (t.closest("#ccAddCond")) { addNode({ type: "cond", text: "" }); setTimeout(() => $(`[data-cond="${C.picked}"]`)?.focus(), 50); return; }
+  if (t.closest("#ccAddOpp")) { addNode({ type: "opp", action: OPP_ACTIONS[0], res: "guard" }); return; }
+  if (t.closest("#ccAddMemo")) { const keep = C.picked; C.picked = null; const p = keep && C.chart.nodes[keep]; const id = "n" + uid(); const pos = placeAfter(keep); C.chart.nodes[id] = { type: "memo", text: "", x: pos.x, y: pos.y }; C.picked = id; touch(); rerenderChart(); setTimeout(() => $(`[data-memo="${id}"]`)?.focus(), 50); return; }
   if (t.closest("#ccAddAssist")) { addNode({ type: "assist", idx: 0, n: 1 }); return; }
   const ad = t.closest("[data-adot]"); if (ad) { C.chart.nodes[ad.dataset.adot].n = +ad.dataset.k; touch(); rerenderChart(); return; }
   if (t.closest("#ccImport")) { openImport(); return; }
@@ -375,6 +416,7 @@ document.addEventListener("input", e => {
   const t = e.target;
   if (t.id === "ccName") { C.chart.name = t.value; touch(); }
   if (t.id === "ccNote") { C.chart.note = t.value; touch(); }
+  if (t.dataset.memo) { C.chart.nodes[t.dataset.memo].text = t.value; touch(); }
   if (t.dataset.cond) { C.chart.nodes[t.dataset.cond].text = t.value; touch(); clearTimeout(C.condT); C.condT = setTimeout(() => { const pos = t.selectionStart, id = t.dataset.cond; rerenderChart(); const n = $(`[data-cond="${id}"]`); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 700); }
   if (t.id === "pkq") { C.q = t.value; const pos = t.selectionStart; $("#dialog").innerHTML = `<div class="wide"></div>${pickerHTML()}`; const s = $("#pkq"); s.focus(); s.setSelectionRange(pos, pos); }
 });
@@ -382,6 +424,8 @@ document.addEventListener("change", e => {
   if (!inCombo() || !C.chart) return;
   const t = e.target;
   if (t.dataset.str) { C.chart.nodes[t.dataset.str].str = t.value; touch(); rerenderChart(); }
+  if (t.dataset.oact) { C.chart.nodes[t.dataset.oact].action = t.value; touch(); rerenderChart(); }
+  if (t.dataset.ores) { C.chart.nodes[t.dataset.ores].res = t.value; touch(); rerenderChart(); }
   if (t.dataset.aidx) { const n = C.chart.nodes[t.dataset.aidx]; n.idx = +t.value; n.n = 1; touch(); rerenderChart(); }
 });
 /* ドラッグで移動・線を引く */
@@ -411,7 +455,7 @@ document.addEventListener("pointerup", e => {
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-node]"); const from = C.link.from; C.link = null;
     if (el && el.dataset.node !== from && !C.chart.edges.some(x => x.from === from && x.to === el.dataset.node)) {
       const to = el.dataset.node; C.chart.edges.push({ from, to, link: "" });
-      const n = C.chart.nodes[to]; if (n.type === "move") { const pm = prevMove(C.chart, to); const a = pm.node && view(pm.node.ref); const r = a && rel(a, view(n.ref), pm.node.str, n.str); const last = C.chart.edges[C.chart.edges.length - 1]; if (r) last.link = r.type === "link" ? "link" : r.type === "chain" ? "chain" : "cancel"; }
+      const n = C.chart.nodes[to]; if (n.type === "move") { const pm = prevMove(C.chart, to); const a = pm.node && view(pm.node.ref); const r = a && rel(a, view(n.ref), pm.node.str, n.str); const last = C.chart.edges[C.chart.edges.length - 1]; if (r) last.link = r.type === "link" ? "link" : r.type === "chain" ? "chain" : r.type === "follow" ? "follow" : r.type === "tc" ? "tc" : "cancel"; }
       touch(); rerenderChart();
     } else drawEdges();
   }
@@ -538,7 +582,7 @@ function runImport() {
         const id = "n" + uid(); const isNewRow = level !== tree && level.length > 0;
         if (isNewRow || (level === tree && tree.length > 0 && col === 0)) row++;
         ch.nodes[id] = tok.type === "cond" ? { type: "cond", text: tok.text, x: 30 + col * (NODE_W + GAP_X), y: baseY + row * 330 } : { type: "move", ref: tok.ref, str: tok.str || "", x: 30 + col * (NODE_W + GAP_X), y: baseY + row * 330 };
-        if (prevId) { let link = tok.link === "cancel" ? "cancel" : ""; if (!link && tok.type === "move") { const pm = prevMove({ ...ch, edges: [...ch.edges, { from: prevId, to: id }] }, id); const a = pm.node && view(pm.node.ref); const rr = a && rel(a, view(tok.ref), pm.node.str, tok.str); if (rr) link = rr.type === "link" ? "link" : rr.type === "chain" ? "chain" : "cancel"; } ch.edges.push({ from: prevId, to: id, link }); }
+        if (prevId) { let link = tok.link === "cancel" ? "cancel" : ""; if (!link && tok.type === "move") { const pm = prevMove({ ...ch, edges: [...ch.edges, { from: prevId, to: id }] }, id); const a = pm.node && view(pm.node.ref); const rr = a && rel(a, view(tok.ref), pm.node.str, tok.str); if (rr) link = rr.type === "link" ? "link" : rr.type === "chain" ? "chain" : rr.type === "follow" ? "follow" : r.type === "tc" ? "tc" : "cancel"; } ch.edges.push({ from: prevId, to: id, link }); }
         hit = { key, id, kids: [] }; level.push(hit);
       }
       prevId = hit.id; level = hit.kids; col++;

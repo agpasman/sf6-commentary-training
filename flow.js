@@ -28,6 +28,19 @@ function isGround(v) {
 /* a のあとに b がつながるか。戻り値 {sit:"normal"|"ch"|"pc", type, text} または null */
 function rel(a, b, aStr, bStr) {
   if (!a || !b || a.kind === "sys" || b.kind === "sys") return null;
+  // 派生技：b の出し方の条件に a の名前が入っていれば、a から派生でつながる（例：疾駆け → 弧空 → 武神鉾刃脚）
+  if (b.kind === "move" && a.kind === "move" && b.cond) {
+    const an = norm(a.name).replace(/^od/, ""); const bc = norm(b.cond);
+    if (an.length >= 2 && bc.includes(an)) return { sit: "normal", type: "follow", text: `派生（${a.name}から）` };
+  }
+  // a の条件欄に「b に派生可能」と書かれている（例：ジュリ 歳破衝 → 暗剣殺）
+  if (b.kind === "move" && a.kind === "move" && a.cond && norm(a.cond).includes(norm(b.name)) && norm(b.name).length >= 2) return { sit: "normal", type: "follow", text: `派生（${a.name}の条件より）` };
+  // ターゲットコンボ：特殊技のコマンドが「強P → 強K」のように a のボタンから始まる
+  if (b.kind === "move" && b.cat === "特殊技" && a.kind === "normal" && /→/.test(ITEMS[b.id]?.item.cmd || "")) {
+    const first = (ITEMS[b.id].item.cmd.split("→")[0] || "").replace(/\s/g, "");
+    const mine = (a.key[0] === "c" ? "2" : "") + BTN_JA[a.key.slice(1)];
+    if (first === mine) return { sit: "normal", type: "tc", text: `ターゲットコンボ（${a.label}から続けて入力）` };
+  }
   if (!isGround(a) || !isGround(b)) return null;
   const ra = rowFor(a, aStr); if (!ra) return null;
   const hit = fNum(ra[4]); const can = String(ra[6] || ""); const note = String(ra[14] || "");
