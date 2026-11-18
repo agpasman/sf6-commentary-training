@@ -15,7 +15,19 @@ const LINKS = { "": "▸", cancel: "キャンセル", link: "目押し", tc: "TC
 const STRS = ["", "弱", "中", "強", "OD"];
 const POSS = ["", "画面中央", "画面端", "どこでも"];
 
-const C = { char: null, sel: null, edit: null, q: "", tab: "通常技", rate: 1.5, playId: 0, playing: false, stageP: null, loop: false };
+const C = { char: null, sel: null, edit: null, q: "", tab: "通常技", rate: 1.5, playId: 0, playing: false, stageP: null, loop: false, mode: "flow" };
+/* 2つの手順のつながりチェック */
+function stepRel(prev, st) { if (!prev || !st) return null; return rel(view(prev.ref), view(st.ref), prev.str, st.str); }
+function relChip(prev, st) {
+  const r = stepRel(prev, st);
+  const a = view(prev.ref), b = view(st.ref);
+  if (!r) {
+    const why = a?.kind === "sys" || b?.kind === "sys" ? "システム行動をはさむため計算できません" : !isGround(a) || !isGround(b) ? "空中の技を含むため計算できません（空中コンボは計算外）" : "フレームデータ上は通常ヒットでつながりません（ダウン技のあとの追撃・DRC・画面端などの条件なら可能な場合あり）";
+    return `<span class="rchip unk" title="${esc(why)}" tabindex="0">？</span>`;
+  }
+  const lab = { normal: "✓", ch: "CH", pc: "PC" }[r.sit];
+  return `<span class="rchip ${r.sit}" title="${esc(SIT[r.sit] + "：" + r.text)}" tabindex="0">${lab}</span>`;
+}
 
 function ensureSys() {
   if (ITEMS["sys-drc"]) return;
@@ -53,7 +65,14 @@ function renderCombo() {
       <button class="btn primary" id="cNew">＋ レシピを作る</button>
       <div class="mlist">${list.map(([id, r]) => `<button class="matchitem" data-recipe="${id}" aria-current="${id === C.sel && !C.edit}">${esc(r.name || "無題のレシピ")}<small>${r.steps.length}手${r.pos ? "・" + esc(r.pos) : ""}${r.dmg ? "・" + esc(r.dmg) + "ダメージ" : ""}${LOCAL.recipes[id] ? "・未公開" : ""}</small></button>`).join("") || `<p class="note">まだレシピがありません</p>`}</div>
     </div>`;
-  $("#main").innerHTML = `<div class="stack">${charBar(c.id, "data-cchar")}
+  const modeSeg = `<div class="seg" role="group" aria-label="表示"><button data-cmode="flow" aria-pressed="${C.mode === "flow"}">つながり全体図</button><button data-cmode="recipe" aria-pressed="${C.mode === "recipe"}">オリジナルチャート（レシピ）</button></div>`;
+  if (C.mode === "flow" && !C.edit) {
+    $("#main").innerHTML = `<div class="stack">${charBar(c.id, "data-cchar")}<div class="row" style="justify-content:space-between"><h1>${esc(c.name)}</h1>${modeSeg}</div>${flowHTML(c.id)}</div>`;
+    FL.hover = null; if (FL.open && !view(FL.open)?.id?.startsWith(c.id)) FL.open = null;
+    if (FL.open) $("#flDetail").innerHTML = flowDetail(FL.open);
+    requestAnimationFrame(bindFlow); return;
+  }
+  $("#main").innerHTML = `<div class="stack">${charBar(c.id, "data-cchar")}<div class="row" style="justify-content:flex-end">${modeSeg}</div>
     <div class="combogrid">${left}<div class="stack" id="cMain">${C.edit ? editorHTML() : viewerHTML()}</div></div></div>`;
   if (!C.edit) setupComboVideos();
 }
@@ -74,11 +93,13 @@ function viewerHTML() {
         <button class="btn small" id="cEdit">編集</button><button class="btn small" id="cDup">複製</button><button class="btn small danger" id="cDel">削除</button></div>
     </div>
     <div class="player cstage" id="cStage" ${C.playing ? "" : "hidden"}><div class="ov" id="cOv"></div></div>
-    <div class="steps">${steps.map((sv, i) => `${i ? `<div class="link">${esc(LINKS[r.steps[i].link || ""])}</div>` : ""}
+    <div class="steps">${steps.map((sv, i) => `${i ? `<div class="link"><span>${esc(LINKS[r.steps[i].link || ""])}</span>${relChip(r.steps[i - 1], r.steps[i])}<span class="arrow">→</span></div>` : ""}
       <button class="stepcard" data-step="${i}">
         <div class="media">${sv.video ? `<video data-src="${sv.video}" muted loop playsinline preload="none"></video>` : `<span class="btnlabel" style="font-size:24px">${esc(sv.kind === "normal" ? sv.label : sv.label || sv.name)}</span>`}<span class="badge">${i + 1}</span></div>
         <div class="body">${sv.kind === "normal" ? `<span class="note">${esc(sv.name)}</span>` : `<span class="nm">${esc(sv.sname)}</span>`}<span class="cmd">${stepCmd(sv)}</span></div>
       </button>`).join("")}</div>
+    <details class="panel"><summary><b>つながりチェック</b> <span class="note">（✓ 通常ヒットでつながる／CH カウンター時のみ／PC パニカン時のみ／？ 計算外）</span></summary>
+      <ul class="easy">${r.steps.slice(1).map((st, i) => { const rr = stepRel(r.steps[i], st); const a = stepView(r.steps[i]), b = stepView(st); return `<li>${esc(a?.sname)} → ${esc(b?.sname)}：${rr ? `<span class="sit-${rr.sit === "normal" ? "n" : rr.sit}">${SIT[rr.sit]}</span> ${esc(rr.text)}` : `<span class="note">計算できない、またはフレーム上はつながらない</span>`}</li>`; }).join("")}</ul></details>
     <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">レシピ</h2><button class="btn small" id="cCopy">文字でコピー</button></div>
       <div class="recipeline">${steps.map((sv, i) => `${i ? `<span class="ic seq">${r.steps[i].link ? esc(LINKS[r.steps[i].link]) : "▸"}</span>` : ""}${stepCmd(sv)}`).join("")}</div>
       <div class="note" id="cText">${esc(nameLine)}<br>${esc(textLine)}</div></div>
@@ -142,17 +163,31 @@ function editorHTML() {
       <div class="panel"><h2 style="margin:0">並び（${r.steps.length}手）</h2>
         <div class="stack" style="gap:4px">${r.steps.map((st, i) => { const sv = stepView(st); if (!sv) return ""; return `<div class="steprow">
           <span class="note">${i + 1}</span>
-          ${i ? `<select data-slink="${i}" aria-label="つなぎ方">${Object.entries(LINKS).map(([k, t]) => `<option value="${k}" ${k === (st.link || "") ? "selected" : ""}>${k ? t : "つなぎ"}</option>`).join("")}</select>` : `<span class="note">始動</span>`}
+          ${i ? `${relChip(r.steps[i - 1], st)}<select data-slink="${i}" aria-label="つなぎ方">${Object.entries(LINKS).map(([k, t]) => `<option value="${k}" ${k === (st.link || "") ? "selected" : ""}>${k ? t : "つなぎ"}</option>`).join("")}</select>` : `<span class="note">始動</span>`}
           <span><b>${esc(sv.sname)}</b> <span class="cmd">${stepCmd(sv)}</span></span>
           ${strable(view(st.ref)) ? `<select data-sstr="${i}" aria-label="強さ">${STRS.map(s => `<option value="${s}" ${s === (st.str || "") ? "selected" : ""}>${s || "強さ"}</option>`).join("")}</select>` : "<span></span>"}
           <span class="row" style="gap:2px"><button class="btn small" data-sup="${i}" ${i ? "" : "disabled"} aria-label="前へ">↑</button><button class="btn small" data-sdown="${i}" ${i < r.steps.length - 1 ? "" : "disabled"} aria-label="後ろへ">↓</button><button class="btn small danger" data-sdel="${i}" aria-label="削除">✕</button></span>
         </div>`; }).join("") || `<p class="note">右の一覧から技を押すと、ここに順番に入ります。</p>`}</div></div>
       <div class="panel"><h2 style="margin:0">技を追加</h2>
+        ${suggestHTML()}
         <input type="search" id="cq" value="${esc(C.q)}" placeholder="技名・よみ・コマンドで検索" aria-label="技を検索">
         <div class="chips">${tabs.map(t => `<button class="chip" data-ctab="${t}" aria-pressed="${t === C.tab && !q}">${t}</button>`).join("")}</div>
         <div class="picklist" style="max-height:420px">${pool.map(v => `<div class="pick" data-add="${v.id}" role="button" tabindex="0" style="grid-template-columns:1fr auto"><span>${v.kind === "normal" ? `<b>${esc(v.label)}</b> <small class="note">${esc(v.name)}</small>` : esc(v.name)}</span><span class="c">${v.kind === "normal" ? normalCmd(v) : cmdHTML(v.cmd || "")}</span></div>`).join("") || `<p class="note">該当なし</p>`}</div>
       </div>
     </div>`;
+}
+function suggestHTML() {
+  const r = C.edit; const last = r.steps[r.steps.length - 1]; if (!last) return `<div class="note">最初の技を選ぶと、次につながる技がここに出ます。</div>`;
+  const a = view(last.ref); if (!a) return "";
+  const sets = flowSets(C.char); const all = [...sets.N, ...sets.S, ...sets.A];
+  const rs = all.map(b => ({ b, r: rel(a, b, last.str) })).filter(x => x.r);
+  const btn = x => `<button class="chip sg ${x.r.sit}" data-add="${x.b.id}" data-link="${x.r.type === "link" ? "link" : x.r.type === "chain" ? "" : "cancel"}" title="${esc(x.r.text)}">${esc(x.b.kind === "normal" ? x.b.label : x.b.name)}</button>`;
+  const g = k => rs.filter(x => x.r.sit === k);
+  if (!rs.length) return `<div class="note">「${esc(stepView(last)?.sname)}」から通常ヒットでつながる地上技は見つかりません（ダウン技・空中技など）。下の一覧から自由に選べます。</div>`;
+  return `<div class="suggest"><div class="note">「${esc(stepView(last)?.sname)}」からつながる技（押すと追加）</div>
+    <div class="chips">${g("normal").map(btn).join("") || `<span class="note">通常ヒットではなし</span>`}</div>
+    ${g("ch").length ? `<details><summary class="sit-ch">カウンター時だけつながる（${g("ch").length}）</summary><div class="chips">${g("ch").map(btn).join("")}</div></details>` : ""}
+    ${g("pc").length ? `<details><summary class="sit-pc">パニカン時だけつながる（${g("pc").length}）</summary><div class="chips">${g("pc").map(btn).join("")}</div></details>` : ""}</div>`;
 }
 function readEditorMeta() {
   const r = C.edit; if (!r || !$("#rName")) return;
@@ -171,6 +206,7 @@ document.addEventListener("click", e => {
   const t = e.target;
   const cc = t.closest("[data-cchar]"); if (cc) { if (C.edit && !confirmLeave()) return; C.char = cc.dataset.cchar; PREF.cChar = C.char; savePref(); C.edit = null; C.sel = null; renderCombo(); return; }
   const rc = t.closest("[data-recipe]"); if (rc) { if (C.edit && !confirmLeave()) return; C.edit = null; C.sel = rc.dataset.recipe; renderCombo(); return; }
+  const cm = t.closest("[data-cmode]"); if (cm) { if (C.edit && !confirmLeave()) return; C.mode = cm.dataset.cmode; C.edit = null; renderCombo(); return; }
   if (t.closest("#cNew")) { startEdit(null); return; }
   if (t.closest("#cEdit")) { startEdit(C.sel); return; }
   if (t.closest("#cDup")) { const r = JSON.parse(JSON.stringify(M.recipes[C.sel])); r.name = (r.name || "") + "（コピー）"; r.createdAt = Date.now(); const id = "r" + uid(); saveRecipe(id, r); C.sel = id; renderCombo(); toast("複製しました"); return; }
@@ -193,7 +229,7 @@ document.addEventListener("click", e => {
     const id = C.editId || "r" + uid(); saveRecipe(id, r); C.sel = id; C.edit = null; renderCombo(); toast("保存しました（このブラウザ）。全員に共有するにはデータ管理から書き出してください", 3500); return;
   }
   const tb = t.closest("[data-ctab]"); if (tb) { C.tab = tb.dataset.ctab; C.q = ""; refreshEditor(); return; }
-  const ad = t.closest("[data-add]"); if (ad) { readEditorMeta(); C.edit.steps.push({ ref: ad.dataset.add, str: "", link: "" }); refreshEditor(); return; }
+  const ad = t.closest("[data-add]"); if (ad) { readEditorMeta(); C.edit.steps.push({ ref: ad.dataset.add, str: "", link: C.edit.steps.length ? (ad.dataset.link || "") : "" }); refreshEditor(); return; }
   const up = t.closest("[data-sup]"); if (up) { const i = +up.dataset.sup; const s = C.edit.steps; [s[i - 1], s[i]] = [s[i], s[i - 1]]; refreshEditor(); return; }
   const dn = t.closest("[data-sdown]"); if (dn) { const i = +dn.dataset.sdown; const s = C.edit.steps; [s[i + 1], s[i]] = [s[i], s[i + 1]]; refreshEditor(); return; }
   const dl = t.closest("[data-sdel]"); if (dl) { C.edit.steps.splice(+dl.dataset.sdel, 1); refreshEditor(); return; }
